@@ -31,7 +31,26 @@ Alternatif: Sohbet penceresindeki **⚙️** ile anahtarı oturum boyunca girebi
 ## Paneller
 
 - **Kullanıcı Paneli** — Haritadan konum seç, bina bildir
-- **Yetkili Paneli** — Risk tablosu, yardım özeti, güvenli bölge dağılımı
+- **Yetkili Paneli** — Risk tablosu, yardım özeti, güvenli bölge dağılımı, **Roboflow bina hasar analizi**
+
+### Roboflow — yıkık / sağlam bina tespiti (Yetkili Paneli)
+
+API anahtarı **yalnızca backend**'de (`inference-api/.env`). Eski anahtarı [Roboflow ayarlarından](https://app.roboflow.com/settings/api) silip yenileyin.
+
+```bash
+# Terminal 1 — analiz sunucusu
+cd inference-api
+pip install -r requirements.txt
+copy .env.example .env
+# .env içine ROBOFLOW_API_KEY=yeni_anahtar
+python app.py
+
+# Terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+Yetkili Panel → fotoğraf yükle → **Yıkık bina tespit et** → `POST /api/analyze-image`. Varsayılan olarak iki Universe modeli birleştirilir ([earthquake-damage-detection-xmfgr](https://universe.roboflow.com/roads-aihh0/earthquake-damage-detection-xmfgr), [collapsed-building-detection2-ku0yq](https://universe.roboflow.com/new-workspace-jejih/collapsed-building-detection2-ku0yq)); `inference-api/.env` içinde `ROBOFLOW_MODEL_IDS` ile yapılandırılır.
 
 Veriler `localStorage` içinde saklanır.
 

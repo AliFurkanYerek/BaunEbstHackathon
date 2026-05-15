@@ -8,7 +8,7 @@ import {
 const WELCOME =
   'Merhaba! Ben afet asistanınızım. Haritada konumunuzu seçerseniz size en yakın güvenli alanı söyleyebilirim. Aşağıdaki öne çıkan sorulardan birine tıklayabilir veya kendi sorunuzu yazabilirsiniz.';
 
-export default function Chatbot({ safeZones, selectedCoords, nearestInfo }) {
+export default function Chatbot({ safeZones, zonesByCity, selectedCoords, nearestInfo }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: 'model', text: WELCOME },
@@ -30,6 +30,7 @@ export default function Chatbot({ safeZones, selectedCoords, nearestInfo }) {
 
   const context = {
     safeZones,
+    zonesByCity,
     selectedLocation: selectedCoords,
     nearestZone: nearestInfo,
     safeZonesWithDistance: selectedCoords

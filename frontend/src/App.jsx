@@ -6,6 +6,7 @@ import { STORAGE_KEY } from './data/sampleData.js';
 import { enrichAllBuildings } from './utils/buildingEnricher.js';
 import { sortByRisk } from './utils/riskCalculator.js';
 import { useAssemblyPoints, toSafeZones } from './hooks/useAssemblyPoints.js';
+import { groupSafeZonesByCity } from './utils/safeZonesByCity.js';
 
 let idCounter = Date.now();
 
@@ -34,6 +35,7 @@ export default function App() {
     isPartialCoverage,
   } = useAssemblyPoints();
   const safeZones = useMemo(() => toSafeZones(assemblyPoints), [assemblyPoints]);
+  const zonesByCity = useMemo(() => groupSafeZonesByCity(safeZones), [safeZones]);
   const [rawBuildings, setRawBuildings] = useState(loadBuildings);
 
   const buildings = useMemo(
@@ -90,6 +92,7 @@ export default function App() {
           <UserPlatform
             buildings={buildings}
             safeZones={safeZones}
+            zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
             onAddBuilding={handleAddBuilding}
           />
@@ -97,6 +100,7 @@ export default function App() {
           <AuthorityPlatform
             buildings={buildings}
             safeZones={safeZones}
+            zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
           />
         )}

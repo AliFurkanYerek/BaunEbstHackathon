@@ -15,10 +15,18 @@ export function setGeminiApiKey(key) {
 }
 
 function buildSystemPrompt(context) {
-  const zones = context.safeZones
+  const citySummary = context.zonesByCity
     ?.map(
+      (g) =>
+        `- ${g.city}: ${g.count} toplanma alanı, toplam kapasite ~${g.totalCapacity} kişi`
+    )
+    .join('\n');
+
+  const zones = context.safeZones
+    ?.slice(0, 40)
+    .map(
       (z) =>
-        `- ${z.name}: enlem ${z.lat}, boylam ${z.lng}, kapasite ${z.capacity} kişi`
+        `- ${z.name} (${z.il || 'il yok'}): enlem ${z.lat}, boylam ${z.lng}, kapasite ${z.capacity} kişi`
     )
     .join('\n');
 
@@ -29,7 +37,10 @@ function buildSystemPrompt(context) {
   return `Sen AfetKoordinasyon AI uygulamasının yardımcı asistanısın. Türkçe, sakin ve net konuş.
 Deprem sonrası vatandaşlara yardım ediyorsun. Tıbbi teşhis koyma; acil durumda 112 ve AFAD (122) yönlendir.
 
-GÜVENLİ BÖLGELER (haritada mor işaretler):
+GÜVENLİ BÖLGELER — ŞEHİR ÖZETİ:
+${citySummary || 'Şehir listesi yok'}
+
+ÖRNEK ALANLAR (haritada mor işaretler, il bilgisiyle):
 ${zones || 'Bilgi yok'}
 
 ${allZonesSorted ? `Kullanıcı konumuna göre mesafeler:\n${allZonesSorted}` : ''}

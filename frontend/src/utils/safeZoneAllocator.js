@@ -43,6 +43,7 @@ export function allocateBuildingsToSafeZones(buildings, safeZones) {
     return {
       zoneId: zone.id,
       zoneName: zone.name,
+      il: zone.il || '',
       capacity: zone.capacity,
       assignedPeople,
       utilizationPercent: utilization,

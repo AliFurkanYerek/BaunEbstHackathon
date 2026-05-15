@@ -1,12 +1,27 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import MapView from './MapView.jsx';
 import BuildingForm from './BuildingForm.jsx';
 import Chatbot from './Chatbot.jsx';
+import SafeZonesByCityList from './SafeZonesByCityList.jsx';
+import CityZoneFilter from './CityZoneFilter.jsx';
 import { MAP_CENTER, MAP_ZOOM, MAP_ZOOM_LOCAL } from '../data/sampleData.js';
+import { ALL_CITIES, filterZonesByCity } from '../utils/safeZonesByCity.js';
 
-export default function UserPlatform({ buildings, safeZones, assemblyPoints, onAddBuilding }) {
+export default function UserPlatform({
+  buildings,
+  safeZones,
+  zonesByCity,
+  assemblyPoints,
+  onAddBuilding,
+}) {
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [nearestInfo, setNearestInfo] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(ALL_CITIES);
+
+  const filteredAssemblyPoints = useMemo(
+    () => filterZonesByCity(assemblyPoints, selectedCity),
+    [assemblyPoints, selectedCity]
+  );
 
   const handleMapClick = (lat, lng) => {
     setSelectedCoords({ lat, lng });
@@ -28,6 +43,7 @@ export default function UserPlatform({ buildings, safeZones, assemblyPoints, onA
         minDist = dist;
         nearest = {
           name: zone.name,
+          il: zone.il,
           distanceKm: Math.round(dist * 100) / 100,
           lat: zone.lat,
           lng: zone.lng,
@@ -56,16 +72,29 @@ export default function UserPlatform({ buildings, safeZones, assemblyPoints, onA
             Hasarlı binanın yerine tıkla
           </span>
         </div>
-        <p className="text-sm text-slate-400 mb-3">
-          Mavi işaret = seçtiğin konum. Mor noktalar = AFAD toplanma alanları ({assemblyPoints.length}).
+        <p className="text-sm text-slate-400 mb-2">
+          Mavi işaret = seçtiğin konum. Mor noktalar = AFAD toplanma alanları (
+          {selectedCity === ALL_CITIES
+            ? assemblyPoints.length
+            : `${filteredAssemblyPoints.length} / ${assemblyPoints.length}`}
+          ).
         </p>
+        {zonesByCity?.length > 0 && (
+          <CityZoneFilter
+            groups={zonesByCity}
+            selectedCity={selectedCity}
+            onSelectCity={setSelectedCity}
+            totalCount={assemblyPoints.length}
+            className="mb-3"
+          />
+        )}
         <div
           className="w-full rounded-xl overflow-hidden border-2 border-sky-600/50 shadow-lg shadow-sky-900/20"
           style={{ height: 'min(55vh, 520px)', minHeight: 320 }}
         >
           <MapView
             buildings={buildings}
-            assemblyPoints={assemblyPoints}
+            assemblyPoints={filteredAssemblyPoints}
             center={selectedCoords ? [selectedCoords.lat, selectedCoords.lng] : MAP_CENTER}
             zoom={selectedCoords ? MAP_ZOOM_LOCAL : MAP_ZOOM}
             onMapClick={handleMapClick}
@@ -92,23 +121,21 @@ export default function UserPlatform({ buildings, safeZones, assemblyPoints, onA
               <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/50">
                 <p className="text-sm font-medium text-indigo-200">En yakın güvenli bölge</p>
                 <p className="text-lg font-bold text-white mt-1">{nearestInfo.name}</p>
+                {nearestInfo.il && (
+                  <p className="text-xs text-slate-400">{nearestInfo.il}</p>
+                )}
                 <p className="text-xs text-indigo-300 mt-1">
                   ≈ {nearestInfo.distanceKm} km uzaklıkta
                 </p>
               </div>
             )}
 
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <h4 className="text-sm font-semibold text-slate-300 mb-2">Güvenli Bölgeler</h4>
-              <ul className="space-y-2 text-sm text-slate-400">
-                {safeZones.map((z) => (
-                  <li key={z.id} className="flex justify-between">
-                    <span>🛡️ {z.name}</span>
-                    <span className="text-slate-500">{z.capacity} kişi</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <SafeZonesByCityList
+              safeZones={safeZones}
+              zonesByCity={zonesByCity}
+              selectedCity={selectedCity}
+              onSelectCity={setSelectedCity}
+            />
           </div>
         </div>
       </section>
@@ -116,6 +143,7 @@ export default function UserPlatform({ buildings, safeZones, assemblyPoints, onA
 
     <Chatbot
       safeZones={safeZones}
+      zonesByCity={zonesByCity}
       selectedCoords={selectedCoords}
       nearestInfo={nearestInfo}
     />
