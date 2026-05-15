@@ -7,6 +7,10 @@ import { enrichAllBuildings } from './utils/buildingEnricher.js';
 import { sortByRisk } from './utils/riskCalculator.js';
 import { useAssemblyPoints, toSafeZones } from './hooks/useAssemblyPoints.js';
 import { groupSafeZonesByCity } from './utils/safeZonesByCity.js';
+import {
+  loadZoneArrivals,
+  saveZoneArrivals,
+} from './utils/zoneArrivals.js';
 
 let idCounter = Date.now();
 
@@ -37,6 +41,7 @@ export default function App() {
   const safeZones = useMemo(() => toSafeZones(assemblyPoints), [assemblyPoints]);
   const zonesByCity = useMemo(() => groupSafeZonesByCity(safeZones), [safeZones]);
   const [rawBuildings, setRawBuildings] = useState(loadBuildings);
+  const [zoneArrivals, setZoneArrivals] = useState(loadZoneArrivals);
 
   const buildings = useMemo(
     () => sortByRisk(enrichAllBuildings(rawBuildings, safeZones)),
@@ -47,6 +52,10 @@ export default function App() {
     saveBuildings(rawBuildings);
   }, [rawBuildings]);
 
+  useEffect(() => {
+    saveZoneArrivals(zoneArrivals);
+  }, [zoneArrivals]);
+
   const handleAddBuilding = useCallback((formData) => {
     const raw = {
       id: `bina-${++idCounter}`,
@@ -54,6 +63,19 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setRawBuildings((prev) => [...prev, raw]);
+  }, []);
+
+  const handleZoneArrival = useCallback(({ zoneId, peopleCount }) => {
+    const n = Math.max(1, Number(peopleCount) || 1);
+    setZoneArrivals((prev) => [
+      ...prev,
+      {
+        id: `ulasim-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        zoneId: String(zoneId),
+        peopleCount: n,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
   }, []);
 
   return (
@@ -95,6 +117,7 @@ export default function App() {
             zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
             onAddBuilding={handleAddBuilding}
+            onZoneArrival={handleZoneArrival}
           />
         ) : (
           <AuthorityPlatform
@@ -102,6 +125,7 @@ export default function App() {
             safeZones={safeZones}
             zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
+            zoneArrivals={zoneArrivals}
           />
         )}
       </main>

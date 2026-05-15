@@ -54,3 +54,26 @@ export function allocateBuildingsToSafeZones(buildings, safeZones) {
 
   return { assignments, distribution };
 }
+
+/**
+ * Kullanıcıların "bu güvenli bölgedeyim" bildirimlerini dağılım satırlarına ekler.
+ * Doluluk = (yönlendirilen + ulaşan) / kapasite
+ */
+export function mergeArrivalsIntoDistribution(distribution, arrivalsByZoneMap) {
+  return distribution.map((row) => {
+    const arrived = arrivalsByZoneMap.get(String(row.zoneId)) ?? 0;
+    const totalOcc = row.assignedPeople + arrived;
+    const utilization =
+      row.capacity > 0 ? Math.min(100, Math.round((totalOcc / row.capacity) * 100)) : 0;
+    const buildingOnly =
+      row.capacity > 0 ? Math.round((row.assignedPeople / row.capacity) * 100) : 0;
+    return {
+      ...row,
+      arrivedPeople: arrived,
+      totalOccupancyPeople: totalOcc,
+      buildingUtilizationPercent: buildingOnly,
+      utilizationPercent: utilization,
+      arrivalAid: calculateBuildingAid(arrived),
+    };
+  });
+}

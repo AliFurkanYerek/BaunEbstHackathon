@@ -6,6 +6,7 @@ import SafeZonesByCityList from './SafeZonesByCityList.jsx';
 import CityZoneFilter from './CityZoneFilter.jsx';
 import { MAP_CENTER, MAP_ZOOM, MAP_ZOOM_LOCAL } from '../data/sampleData.js';
 import { ALL_CITIES, filterZonesByCity } from '../utils/safeZonesByCity.js';
+import SafeZoneCheckIn from './SafeZoneCheckIn.jsx';
 
 export default function UserPlatform({
   buildings,
@@ -13,6 +14,7 @@ export default function UserPlatform({
   zonesByCity,
   assemblyPoints,
   onAddBuilding,
+  onZoneArrival,
 }) {
   const [selectedCoords, setSelectedCoords] = useState(null);
   const [nearestInfo, setNearestInfo] = useState(null);
@@ -42,6 +44,7 @@ export default function UserPlatform({
       if (dist < minDist) {
         minDist = dist;
         nearest = {
+          id: zone.id,
           name: zone.name,
           il: zone.il,
           distanceKm: Math.round(dist * 100) / 100,
@@ -129,6 +132,13 @@ export default function UserPlatform({
                 </p>
               </div>
             )}
+
+            <SafeZoneCheckIn
+              zonesByCity={zonesByCity}
+              selectedMapCity={selectedCity}
+              nearestInfo={nearestInfo}
+              onArrival={onZoneArrival}
+            />
 
             <SafeZonesByCityList
               safeZones={safeZones}

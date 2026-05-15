@@ -30,8 +30,8 @@ Alternatif: Sohbet penceresindeki **⚙️** ile anahtarı oturum boyunca girebi
 
 ## Paneller
 
-- **Kullanıcı Paneli** — Haritadan konum seç, bina bildir
-- **Yetkili Paneli** — Risk tablosu, yardım özeti, güvenli bölge dağılımı, **Roboflow bina hasar analizi**
+- **Kullanıcı Paneli** — Haritadan konum seç, bina bildir; güvenli bölgeye vardığınızda **«Güvenli bölgedeyim»** ile kişi sayısı bildirin (doluluk ve malzeme önerisi yerelde saklanır, yetkili panelinde görülür).
+- **Yetkili Paneli** — Risk tablosu, yardım özeti, güvenli bölge doluluğu (yönlendirilen + ulaşan bildirimi), ulaşan kişiye göre önerilen malzeme miktarları, **Roboflow bina hasar analizi**
 
 ### Roboflow — yıkık / sağlam bina tespiti (Yetkili Paneli)
 

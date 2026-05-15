@@ -42,6 +42,7 @@ export function groupDistributionByCity(distribution, safeZones) {
         city,
         rows: [],
         totalAssigned: 0,
+        totalArrived: 0,
         totalCapacity: 0,
         zoneCount: 0,
       });
@@ -49,6 +50,7 @@ export function groupDistributionByCity(distribution, safeZones) {
     const group = map.get(city);
     group.rows.push({ ...row, il: city });
     group.totalAssigned += row.assignedPeople;
+    group.totalArrived += row.arrivedPeople ?? 0;
     group.totalCapacity += row.capacity;
     group.zoneCount += 1;
   }

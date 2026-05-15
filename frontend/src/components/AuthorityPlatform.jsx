@@ -7,11 +7,13 @@ import CityZoneFilter from './CityZoneFilter.jsx';
 import BuildingDamageAnalyzer from './BuildingDamageAnalyzer.jsx';
 import { calculateTotalAid } from '../utils/aidCalculator.js';
 import { sortByRisk, countCriticalBuildings } from '../utils/riskCalculator.js';
-import { allocateBuildingsToSafeZones } from '../utils/safeZoneAllocator.js';
+import { allocateBuildingsToSafeZones, mergeArrivalsIntoDistribution } from '../utils/safeZoneAllocator.js';
 import { MAP_CENTER, MAP_ZOOM } from '../data/sampleData.js';
 import { ALL_CITIES, filterZonesByCity } from '../utils/safeZonesByCity.js';
+import { arrivalsByZoneId, totalArrivalPeopleCount } from '../utils/zoneArrivals.js';
 
-export default function AuthorityPlatform({ buildings, safeZones, zonesByCity, assemblyPoints }) {
+export default function AuthorityPlatform({ buildings, safeZones, zonesByCity, assemblyPoints, zoneArrivals = [] }) {
+  const arrivalsMap = useMemo(() => arrivalsByZoneId(zoneArrivals), [zoneArrivals]);
   const [selectedCity, setSelectedCity] = useState(ALL_CITIES);
 
   const filteredAssemblyPoints = useMemo(
@@ -27,6 +29,13 @@ export default function AuthorityPlatform({ buildings, safeZones, zonesByCity, a
     [buildings, safeZones]
   );
 
+  const mergedDistribution = useMemo(
+    () => mergeArrivalsIntoDistribution(distribution, arrivalsMap),
+    [distribution, arrivalsMap]
+  );
+
+  const arrivalPeople = useMemo(() => totalArrivalPeopleCount(zoneArrivals), [zoneArrivals]);
+
   const stats = useMemo(
     () => ({
       buildingCount: buildings.length,
@@ -35,8 +44,9 @@ export default function AuthorityPlatform({ buildings, safeZones, zonesByCity, a
       totalFood: totalAid.food,
       totalBlankets: totalAid.blankets,
       criticalCount: countCriticalBuildings(buildings, 150),
+      arrivalPeople,
     }),
-    [buildings, totalAid]
+    [buildings, totalAid, arrivalPeople]
   );
 
   return (
@@ -47,7 +57,7 @@ export default function AuthorityPlatform({ buildings, safeZones, zonesByCity, a
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <RiskTable buildings={sortedBuildings} />
-        <SafeZoneDistribution distribution={distribution} safeZones={safeZones} />
+        <SafeZoneDistribution distribution={mergedDistribution} safeZones={safeZones} />
       </div>
 
       <section>
