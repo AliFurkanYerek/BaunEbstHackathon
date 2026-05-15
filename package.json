@@ -1,0 +1,12 @@
+{
+  "name": "afet-koordinasyon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deprem sonrası afet koordinasyon web uygulaması",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview",
+    "install:all": "cd frontend && npm install"
+  }
+}
