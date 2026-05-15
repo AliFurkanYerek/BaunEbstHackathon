@@ -1,4 +1,4 @@
-# AfetKoordinasyon AI
+# Hackathon Deprem Projesi — AfetKoordinasyon AI
 
 Deprem sonrası bina bildirimi, risk analizi ve güvenli bölge koordinasyonu — React + Vite.
 
@@ -20,7 +20,7 @@ http://localhost:5173
 2. `frontend/.env` dosyası oluşturun:
 
 ```
-VITE_GEMINI_API_KEY=AIzaSy...
+VITE_GEMINI_API_KEY=your_key_here
 ```
 
 3. Dev sunucusunu yeniden başlatın (`npm run dev`)
@@ -35,9 +35,13 @@ Alternatif: Sohbet penceresindeki **⚙️** ile anahtarı oturum boyunca girebi
 
 Veriler `localStorage` içinde saklanır.
 
+## AFAD toplanma alanları
+
+Haritadaki mor noktalar [AFAD açık veri](https://github.com/RKursatV/afad-toplanma-alani-acik-veri) kaynağından gelir (şu an deprem bölgesi illeri). Tüm Türkiye için `npm run build:afad` (frontend klasöründe).
+
 ## npm paketleri
 
 - react, react-dom
 - vite, @vitejs/plugin-react
 - tailwindcss, @tailwindcss/vite
-- leaflet, react-leaflet
+- leaflet, react-leaflet, leaflet.markercluster

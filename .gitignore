@@ -4,9 +4,15 @@ backend/data/
 backend/uploads/
 .env
 .env.local
+.env.*
+!.env.example
 frontend/.env
 *.log
 .DS_Store
 __pycache__/
 *.pyc
 frontend/scripts/debug-afad-response.txt
+*.tsbuildinfo
+.vite/
+coverage/
+.cache/
