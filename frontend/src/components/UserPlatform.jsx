@@ -210,8 +210,8 @@ export default function UserPlatform({
           <p className="text-sm text-slate-400 mb-2 animate-pulse">Rota hesaplanıyor…</p>
         )}
         <p className="text-xs text-slate-500 mb-2">
-          Mavi pin = seçtiğin konum · Mor = güvenli bölge · Kırmızı + = hastane · Renkli nokta =
-          bildirimler (Tümü katmanında)
+          <span className="text-red-400">Kırmızı</span> ile işaretli alanlar hastane;{' '}
+          <span className="text-blue-400">mavi</span> ile işaretli alanlar güvenli bölgedir.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <MapLayerFilter

@@ -24,10 +24,6 @@ export default function AuthorityRecordManager({
     <section className="rounded-xl border border-slate-700 bg-slate-900/80 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-800">
         <h3 className="font-semibold text-white text-sm">Harita kayıtları — silme</h3>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Enkaz (turuncu E) ve kullanıcı bildirimleri (renkli nokta) haritada kalır; silene kadar
-          risk tablolarında da görünür.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:divide-x divide-slate-800">

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
-import { analyzeImage, checkInferenceBackend, getDatasetUrls } from '../utils/roboflow.js';
+import { analyzeImage, checkInferenceBackend } from '../utils/roboflow.js';
 import { geolocatePhoto } from '../utils/geoPhoto.js';
 import { formatUserMessage } from '../utils/formatUserMessage.js';
 
@@ -145,20 +145,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
         <h3 className="font-semibold text-white flex items-center gap-2">
           <span aria-hidden>🔬</span> Yapay Zeka — Bina Hasar Tespiti
         </h3>
-        <p className="text-xs text-slate-400 mt-1">
-          İki Roboflow modeli birleştirilir (IoU ile çift kutular elenir):{' '}
-          {getDatasetUrls().map(([label, href], i) => (
-            <span key={href}>
-              {i > 0 ? ' · ' : ''}
-              <a href={href} target="_blank" rel="noreferrer" className="text-violet-300 hover:underline">
-                {label}
-              </a>
-            </span>
-          ))}{' '}
-          · sınıf: <strong className="text-slate-300">collapsed</strong>
-          <br />
-          Hasar tespitinden sonra konum: EXIF GPS veya GeoSeer ile haritada pembe 📷 işareti.
-        </p>
       </div>
 
       <div className="p-4 space-y-4">
@@ -274,32 +260,14 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
 
         {result && (
           <>
-            {result.message && (
-              <p className="text-xs text-violet-200/90 bg-violet-950/40 border border-violet-800/50 rounded-lg px-3 py-2">
-                {result.message}
-              </p>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatCard label="Sağlam" value={summaryFrom(result).intact} color="text-emerald-400" />
+            <div className="grid grid-cols-2 gap-3">
               <StatCard label="Yıkık" value={summaryFrom(result).collapsed} color="text-red-400" />
-              <StatCard label="Toplam kutu" value={summaryFrom(result).total} color="text-slate-300" />
               <StatCard
-                label="Önerilen hasar"
+                label="Tespit Edilen Hasar Oranı"
                 value={`${result.suggestedDamageLevel ?? '-'}/5`}
                 color="text-violet-300"
               />
             </div>
-            {result.detections?.length > 0 && (
-              <ul className="text-xs text-slate-400 space-y-1 max-h-32 overflow-y-auto">
-                {result.detections.map((d) => (
-                  <li key={d.id}>
-                    <span style={{ color: d.color }}>
-                      {d.label} — {(d.confidence * 100).toFixed(1)}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </>
         )}
       </div>
@@ -309,20 +277,17 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
 
 function summaryFrom(result) {
   const dets = result?.detections ?? [];
-  const intact = dets.filter((d) => d.type === 'intact').length;
   const collapsed = dets.filter((d) => d.type === 'collapsed').length;
   const fromApi = result?.summary;
   return {
-    intact: fromApi?.intact ?? intact,
     collapsed: fromApi?.collapsed ?? collapsed,
-    total: fromApi?.total ?? dets.length,
   };
 }
 
 function StatCard({ label, value, color }) {
   return (
     <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center">
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-[10px] tracking-wide text-slate-500 leading-tight">{label}</p>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
     </div>
   );

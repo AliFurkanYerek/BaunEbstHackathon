@@ -110,3 +110,109 @@ export async function sendGeminiMessage(messages, context = {}) {
   if (!text) throw new Error('Yanıt alınamadı. Lütfen tekrar deneyin.');
   return text.trim();
 }
+
+function parseJsonFromGemini(text) {
+  const trimmed = text.trim();
+  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fence ? fence[1].trim() : trimmed;
+  return JSON.parse(raw);
+}
+
+/**
+ * Ambulans rotası — yıkık bina tespitlerini dikkate alarak ara nokta önerir.
+ * @returns {Promise<{ waypoints: Array<{lat:number,lng:number,reason?:string}>; notes: string }>}
+ */
+export async function planAmbulanceRouteWithGemini({
+  hospital,
+  destination,
+  hazards,
+  routeSample,
+  avoidRadiusM = 70,
+}) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API anahtarı gerekli (frontend/.env veya sohbet ayarları).');
+  }
+
+  const hazardList = (hazards || []).slice(0, 40).map((h, i) => ({
+    id: i + 1,
+    lat: Number(h.lat.toFixed(5)),
+    lng: Number(h.lng.toFixed(5)),
+    collapsed: h.collapsed,
+    label: h.label,
+    address: h.address || '',
+    bufferM: avoidRadiusM,
+  }));
+
+  const userPrompt = `Yetkili panel — ambulans rota planı.
+
+GÖREV: En yakın hastaneden bildirilen olay noktasına ARAÇ rotası planla.
+KURAL: Yıkık bina / enkaz tespit noktalarının merkezine ${avoidRadiusM} metreden DAHA YAKIN yol kullanma.
+Mümkün olan en kısa süreli güvenli yolu tercih et; gerekiyorsa 0–4 ara nokta (waypoint) öner.
+
+HASTANE (başlangıç):
+${JSON.stringify({ name: hospital.name, lat: hospital.lat, lng: hospital.lng })}
+
+BİLDİRİLEN KONUM (varış):
+${JSON.stringify({ name: destination.name, lat: destination.lat, lng: destination.lng, kind: destination.kind })}
+
+YIKIK BİNA TESPİTLERİ (Roboflow — kaçınılacak, ${hazardList.length} adet):
+${JSON.stringify(hazardList)}
+
+İLK OSRM ARAÇ ROTASI ÖRNEK NOKTALARI (referans):
+${JSON.stringify(routeSample || [])}
+
+Yanıtı YALNIZCA şu JSON olarak ver (başka metin yok):
+{
+  "waypoints": [{"lat": number, "lng": number, "reason": "kısa Türkçe açıklama"}],
+  "notes": "Yetkiliye 2-4 cümle Türkçe özet: hangi yıkık alanlardan kaçınıldı, tahmini güvenlik"
+}`;
+
+  const res = await fetch(
+    `${API_BASE}/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text: `Sen afet koordinasyonunda ambulans rota planlayıcısısın. Koordinatlar WGS84 (lat, lng).
+Yıkık bina tespitlerinin ${avoidRadiusM} m yakınından geçen güzergâhları reddet.
+Sadece geçerli JSON döndür.`,
+            },
+          ],
+        },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  );
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const raw = data?.error?.message ?? data?.error;
+    throw new Error(formatUserMessage(raw) || `Gemini API hatası (${res.status})`);
+  }
+
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini rota yanıtı alınamadı.');
+
+  const parsed = parseJsonFromGemini(text);
+  const waypoints = (parsed.waypoints || [])
+    .filter((w) => Number.isFinite(w.lat) && Number.isFinite(w.lng))
+    .map((w) => ({
+      lat: w.lat,
+      lng: w.lng,
+      reason: w.reason || '',
+    }));
+
+  return {
+    waypoints,
+    notes: typeof parsed.notes === 'string' ? parsed.notes.trim() : '',
+  };
+}

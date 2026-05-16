@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
+import AmbulanceRoutePlanner from './AmbulanceRoutePlanner.jsx';
 import SummaryCards from './SummaryCards.jsx';
 import RiskAggregationPanel from './RiskAggregationPanel.jsx';
 import SafeZoneDistribution from './SafeZoneDistribution.jsx';
@@ -36,6 +37,10 @@ export default function AuthorityPlatform({
   const [selectedCity, setSelectedCity] = useState(ALL_CITIES);
   const [mapLayer, setMapLayer] = useState(MAP_LAYER_ALL);
   const [damagePhotoGeo, setDamagePhotoGeo] = useState(null);
+  const [navigationRoute, setNavigationRoute] = useState(null);
+  const [incidentHighlight, setIncidentHighlight] = useState(null);
+
+  const clearRoute = useCallback(() => setNavigationRoute(null), []);
 
   const handleDeletePhoto = (id) => {
     const removed = photoReports.find((p) => p.id === id);
@@ -108,6 +113,14 @@ export default function AuthorityPlatform({
         onDeleteBuilding={onDeleteBuilding}
       />
 
+      <AmbulanceRoutePlanner
+        buildings={buildings}
+        photoReports={photoReports}
+        hospitals={hospitals}
+        onRouteReady={setNavigationRoute}
+        onHighlightIncident={setIncidentHighlight}
+      />
+
       <RiskAggregationPanel buildings={buildings} photoReports={photoReports} />
 
       <div className="grid grid-cols-1 xl:grid-cols-1 gap-6">
@@ -123,11 +136,22 @@ export default function AuthorityPlatform({
 
       <section>
         <h3 className="font-semibold text-white mb-2">Operasyon Haritası</h3>
-        <p className="text-xs text-slate-500 mb-2">
-          Katman seçin: güvenli bölge, hastane,{' '}
-          <strong className="text-orange-300">bildirilenler</strong> (turuncu E = fotoğraf/enkaz,
-          renkli nokta = kullanıcı bildirimi) veya tümü.
-        </p>
+        {navigationRoute?.routeKind === 'ambulance' && (
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+            <span className="text-rose-200">
+              🚑 Ambulans rotası: <strong>{navigationRoute.originName}</strong> →{' '}
+              <strong>{navigationRoute.destinationName}</strong>
+              {navigationRoute.summary ? ` (${navigationRoute.summary})` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={clearRoute}
+              className="px-2 py-0.5 rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+            >
+              Rotayı kaldır
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <MapLayerFilter
             options={AUTHORITY_MAP_LAYERS}
@@ -152,8 +176,9 @@ export default function AuthorityPlatform({
             center={MAP_CENTER}
             zoom={MAP_ZOOM}
             showRiskHeat
-            highlightPhotoLocation={damagePhotoGeo}
+            highlightPhotoLocation={incidentHighlight || damagePhotoGeo}
             photoReports={photoReports}
+            navigationRoute={navigationRoute}
           />
         </div>
       </section>

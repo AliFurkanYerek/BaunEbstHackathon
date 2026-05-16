@@ -19,11 +19,6 @@ export default function BottomAssemblyPanel({ safeZones, zonesByCity, onArrival 
 
   return (
     <div className="space-y-6 pt-2 border-t border-slate-800">
-      <p className="text-xs text-slate-500">
-        Toplanma alanı seçimi ve aşağıdaki harita yalnızca bu bölüme aittir; üstteki hasar
-        bildirimi haritasından bağımsızdır.
-      </p>
-
       <SafeZoneCheckIn
         zonesByCity={zonesByCity}
         onArrival={onArrival}

@@ -17,6 +17,20 @@ const routeDestIconHospital = L.divIcon({
   iconAnchor: [13, 13],
 });
 
+const routeOriginIconAmbulance = L.divIcon({
+  className: '',
+  html: '<div style="width:28px;height:28px;background:#e11d48;border:3px solid white;border-radius:8px;box-shadow:0 2px 12px rgba(225,29,72,0.55);font-size:15px;line-height:28px;text-align:center">🚑</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+});
+
+const routeDestIconIncident = L.divIcon({
+  className: '',
+  html: '<div style="width:26px;height:26px;background:#f97316;border:3px solid white;border-radius:50%;box-shadow:0 2px 12px rgba(249,115,22,0.55);font-size:14px;line-height:26px;text-align:center">📍</div>',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
 function FitRouteBounds({ positions }) {
   const map = useMap();
   useEffect(() => {
@@ -33,17 +47,26 @@ export default function MapRouteLayer({ route }) {
   if (!route?.positions?.length) return null;
 
   const isStraight = route.source === 'straight';
+  const isAmbulance = route.routeKind === 'ambulance';
   const isHospital = route.routeKind === 'hospital';
-  const routeColor = isHospital
+  const routeColor = isAmbulance
     ? isStraight
-      ? '#f87171'
-      : '#dc2626'
-    : isStraight
-      ? '#f59e0b'
-      : '#22d3ee';
+      ? '#fb7185'
+      : '#f43f5e'
+    : isHospital
+      ? isStraight
+        ? '#f87171'
+        : '#dc2626'
+      : isStraight
+        ? '#f59e0b'
+        : '#22d3ee';
   const summary =
     route.distanceM != null && route.durationS != null
-      ? formatRouteSummary(route.distanceM, route.durationS)
+      ? formatRouteSummary(
+          route.distanceM,
+          route.durationS,
+          isAmbulance ? 'driving' : 'foot'
+        )
       : null;
 
   return (
@@ -60,19 +83,42 @@ export default function MapRouteLayer({ route }) {
           lineJoin: 'round',
         }}
       />
+      {route.from && isAmbulance && (
+        <Marker position={[route.from.lat, route.from.lng]} icon={routeOriginIconAmbulance}>
+          <Popup>
+            <div className="text-slate-800 text-sm min-w-[160px]">
+              <p className="font-bold">🚑 {route.originName || 'Hastane (kalkış)'}</p>
+              {summary && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
+            </div>
+          </Popup>
+        </Marker>
+      )}
       {route.to && (
         <Marker
           position={[route.to.lat, route.to.lng]}
-          icon={route.routeKind === 'hospital' ? routeDestIconHospital : routeDestIconSafe}
+          icon={
+            isAmbulance
+              ? routeDestIconIncident
+              : route.routeKind === 'hospital'
+                ? routeDestIconHospital
+                : routeDestIconSafe
+          }
         >
           <Popup>
             <div className="text-slate-800 text-sm min-w-[160px]">
               <p className="font-bold">
-                {route.routeKind === 'hospital' ? '🏥' : '🛡️'}{' '}
+                {isAmbulance ? '📍' : route.routeKind === 'hospital' ? '🏥' : '🛡️'}{' '}
                 {route.destinationName ||
-                  (route.routeKind === 'hospital' ? 'Hastane' : 'Güvenli bölge')}
+                  (isAmbulance
+                    ? 'Bildirilen konum'
+                    : route.routeKind === 'hospital'
+                      ? 'Hastane'
+                      : 'Güvenli bölge')}
               </p>
-              {summary && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
+              {summary && !route.from && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
+              {isAmbulance && route.geminiNotes && (
+                <p className="text-xs mt-1 text-slate-600">{route.geminiNotes}</p>
+              )}
               {isStraight && (
                 <p className="text-xs mt-1 text-amber-700">
                   Sokak rotası alınamadı; düz çizgi gösteriliyor.

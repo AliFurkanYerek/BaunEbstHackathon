@@ -208,27 +208,6 @@ export default function RiskAggregationPanel({ buildings, photoReports }) {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border border-violet-900/40 bg-violet-950/20 px-4 py-3 text-xs text-slate-300">
-        <p className="font-medium text-violet-200 mb-1">Birleşik risk modeli</p>
-        <ul className="list-disc list-inside space-y-0.5 text-slate-400">
-          <li>Fotoğraf analizleri konumla birlikte kaydedilir (GeoSeer / EXIF).</li>
-          <li>Kullanıcı haritadan işaretleyerek bildirim gönderir.</li>
-          <li>
-            İki kaynak{' '}
-            <strong className="text-slate-300">
-              {MERGE_RADIUS_KM.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} km
-            </strong>{' '}
-            içindeyse ana
-            tabloda <strong className="text-slate-300">tek satır</strong> — risk = foto + kullanıcı
-            toplamı.
-          </li>
-          <li>
-            Aynı yarıçap içinde <strong className="text-slate-300">birden fazla kullanıcı</strong>{' '}
-            bildirimi de tek satırda birleşir — risk = tüm kullanıcı risklerinin toplamı.
-          </li>
-        </ul>
-      </div>
-
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <PhotoRiskTable rows={photoRows} />
         <UserRiskTable rows={userRows} />
