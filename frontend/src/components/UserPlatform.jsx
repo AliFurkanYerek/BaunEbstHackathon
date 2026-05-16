@@ -2,13 +2,12 @@ import { useState, useMemo, useCallback } from 'react';
 import MapView from './MapView.jsx';
 import BuildingForm from './BuildingForm.jsx';
 import Chatbot from './Chatbot.jsx';
-import SafeZonesByCityList from './SafeZonesByCityList.jsx';
+import BottomAssemblyPanel from './BottomAssemblyPanel.jsx';
 import CityZoneFilter from './CityZoneFilter.jsx';
 import MapLayerFilter from './MapLayerFilter.jsx';
 import { MAP_LAYER_ALL, USER_MAP_LAYERS } from '../utils/mapLayerFilter.js';
 import { MAP_CENTER, MAP_ZOOM, MAP_ZOOM_LOCAL } from '../data/sampleData.js';
 import { ALL_CITIES, filterZonesByCity } from '../utils/safeZonesByCity.js';
-import SafeZoneCheckIn from './SafeZoneCheckIn.jsx';
 import { findNearestSafeZone, findNearestHospital } from '../utils/distanceCalculator.js';
 import { fetchWalkingRoute, straightLineRoute, formatRouteSummary } from '../utils/osrmRoute.js';
 
@@ -29,7 +28,6 @@ export default function UserPlatform({
   const [mapLayer, setMapLayer] = useState(MAP_LAYER_ALL);
   const [navigationRoute, setNavigationRoute] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
-
   const filteredAssemblyPoints = useMemo(
     () => filterZonesByCity(assemblyPoints, selectedCity),
     [assemblyPoints, selectedCity]
@@ -179,13 +177,12 @@ export default function UserPlatform({
 
   return (
     <>
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto lg:overflow-hidden">
-      {/* HARİTA ÜSTTE — her zaman görünür */}
-      <section className="shrink-0 p-4 pb-2">
+    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <section>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="text-2xl">🗺️</span> Harita
-          </h2>
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <span className="text-xl">🗺️</span> Harita — konum seçin
+          </h3>
           <span className="text-xs px-2 py-1 rounded-full bg-sky-600/30 text-sky-300 border border-sky-500/40">
             Hasarlı binanın yerine tıkla
           </span>
@@ -194,9 +191,7 @@ export default function UserPlatform({
           <p className="text-sm text-cyan-300 mb-2 flex flex-wrap items-center gap-2">
             <span>
               🧭 Haritada{' '}
-              <strong className="text-cyan-200">
-                {navigationRoute.destinationName}
-              </strong>
+              <strong className="text-cyan-200">{navigationRoute.destinationName}</strong>
               yönünde{' '}
               {navigationRoute.source === 'straight' ? 'tahmini' : 'yürüyüş'} rotası
               {navigationRoute.distanceM != null &&
@@ -214,9 +209,9 @@ export default function UserPlatform({
         {routeLoading && (
           <p className="text-sm text-slate-400 mb-2 animate-pulse">Rota hesaplanıyor…</p>
         )}
-        <p className="text-sm text-slate-400 mb-2">
-          Mavi pin = seçtiğin konum · Mor = güvenli bölge · Kırmızı + = hastane · Renkli
-          nokta = bildirimler (Tümü katmanında)
+        <p className="text-xs text-slate-500 mb-2">
+          Mavi pin = seçtiğin konum · Mor = güvenli bölge · Kırmızı + = hastane · Renkli nokta =
+          bildirimler (Tümü katmanında)
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <MapLayerFilter
@@ -234,8 +229,8 @@ export default function UserPlatform({
           )}
         </div>
         <div
-          className="w-full rounded-xl overflow-hidden border-2 border-sky-600/50 shadow-lg shadow-sky-900/20"
-          style={{ height: 'min(55vh, 520px)', minHeight: 320 }}
+          className="w-full rounded-xl overflow-hidden border border-slate-800"
+          style={{ height: 500 }}
         >
           <MapView
             buildings={buildings}
@@ -252,50 +247,33 @@ export default function UserPlatform({
         </div>
       </section>
 
-      {/* FORM ALTA */}
-      <section className="flex-1 p-4 pt-2 lg:overflow-y-auto">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BuildingForm
-            onSubmit={handleSubmit}
-            selectedCoords={selectedCoords}
-            onClearCoords={() => {
-              setSelectedCoords(null);
-              setNearestInfo(null);
-              setNearestHospitalInfo(null);
-              setNavigationRoute(null);
-            }}
-          />
+      <BuildingForm
+        onSubmit={handleSubmit}
+        selectedCoords={selectedCoords}
+        onClearCoords={() => {
+          setSelectedCoords(null);
+          setNearestInfo(null);
+          setNearestHospitalInfo(null);
+          setNavigationRoute(null);
+        }}
+      />
 
-          <div className="space-y-4">
-            {nearestInfo && (
-              <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/50">
-                <p className="text-sm font-medium text-indigo-200">En yakın güvenli bölge</p>
-                <p className="text-lg font-bold text-white mt-1">{nearestInfo.name}</p>
-                {nearestInfo.il && (
-                  <p className="text-xs text-slate-400">{nearestInfo.il}</p>
-                )}
-                <p className="text-xs text-indigo-300 mt-1">
-                  ≈ {nearestInfo.distanceKm} km uzaklıkta
-                </p>
-              </div>
-            )}
-
-            <SafeZoneCheckIn
-              zonesByCity={zonesByCity}
-              selectedMapCity={selectedCity}
-              nearestInfo={nearestInfo}
-              onArrival={onZoneArrival}
-            />
-
-            <SafeZonesByCityList
-              safeZones={safeZones}
-              zonesByCity={zonesByCity}
-              selectedCity={selectedCity}
-              onSelectCity={setSelectedCity}
-            />
-          </div>
+      {nearestInfo && (
+        <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/50">
+          <p className="text-sm font-medium text-indigo-200">En yakın güvenli bölge</p>
+          <p className="text-lg font-bold text-white mt-1">{nearestInfo.name}</p>
+          {nearestInfo.il && <p className="text-xs text-slate-400">{nearestInfo.il}</p>}
+          <p className="text-xs text-indigo-300 mt-1">
+            ≈ {nearestInfo.distanceKm} km uzaklıkta
+          </p>
         </div>
-      </section>
+      )}
+
+      <BottomAssemblyPanel
+        safeZones={safeZones}
+        zonesByCity={zonesByCity}
+        onArrival={onZoneArrival}
+      />
     </div>
 
     <Chatbot

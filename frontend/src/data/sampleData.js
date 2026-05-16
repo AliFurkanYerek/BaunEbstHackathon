@@ -4,7 +4,6 @@ export const EMERGENCY_TYPES = [
   { id: 'yangin', label: 'Yangın var', coefficient: 90 },
   { id: 'ses', label: 'Ses geliyor', coefficient: 70 },
   { id: 'cocuk_yasli', label: 'Çocuk/yaşlı/engelli var', coefficient: 85 },
-  { id: 'yardim', label: 'Yardım gerekiyor', coefficient: 40 },
 ];
 
 export const SAMPLE_SAFE_ZONES = [
@@ -26,7 +25,7 @@ export function normalizeEmergencyTypes(building) {
     return building.emergencyTypes;
   }
   if (building.emergencyType) return [building.emergencyType];
-  return ['yardim'];
+  return [];
 }
 
 export function getEmergencyCoefficient(emergencyTypeOrTypes) {

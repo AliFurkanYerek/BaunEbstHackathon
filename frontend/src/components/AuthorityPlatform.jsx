@@ -111,7 +111,14 @@ export default function AuthorityPlatform({
       <RiskAggregationPanel buildings={buildings} photoReports={photoReports} />
 
       <div className="grid grid-cols-1 xl:grid-cols-1 gap-6">
-        <SafeZoneDistribution distribution={mergedDistribution} safeZones={safeZones} />
+        <SafeZoneDistribution
+          distribution={mergedDistribution}
+          safeZones={safeZones}
+          zonesByCity={zonesByCity}
+          selectedCity={selectedCity}
+          onSelectCity={setSelectedCity}
+          totalZoneCount={assemblyPoints.length}
+        />
       </div>
 
       <section>

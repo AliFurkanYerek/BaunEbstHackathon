@@ -147,10 +147,12 @@ export default function MapView({
   selectedPosition = null,
   showRiskHeat = false,
   highlightPhotoLocation = null,
+  highlightSafeZone = null,
   photoReports = [],
   hospitals = [],
   mapLayer = MAP_LAYER_ALL,
   navigationRoute = null,
+  scrollWheelZoom = true,
 }) {
   const showSafe = showsSafeZones(mapLayer);
   const showHospitalLayer = showsHospitals(mapLayer);
@@ -186,7 +188,7 @@ export default function MapView({
       center={center}
       zoom={zoom}
       style={{ height: '100%', width: '100%', minHeight: 300 }}
-      scrollWheelZoom
+      scrollWheelZoom={scrollWheelZoom}
     >
       <TileLayer
         attribution='&copy; OpenStreetMap'
@@ -225,6 +227,44 @@ export default function MapView({
           </Popup>
         </Marker>
       )}
+
+      {highlightSafeZone &&
+        Number.isFinite(highlightSafeZone.lat) &&
+        Number.isFinite(highlightSafeZone.lng) && (
+          <>
+            <FlyToHighlight
+              lat={highlightSafeZone.lat}
+              lng={highlightSafeZone.lng}
+              zoom={16}
+            />
+            <Marker position={[highlightSafeZone.lat, highlightSafeZone.lng]} icon={safeIcon}>
+              <Popup>
+                <strong>🛡️ {highlightSafeZone.name}</strong>
+                <br />
+                {highlightSafeZone.il && <span>{highlightSafeZone.il}</span>}
+                {highlightSafeZone.ilce && <span> · {highlightSafeZone.ilce}</span>}
+                <br />
+                Kapasite: {highlightSafeZone.capacity ?? '—'} kişi
+                {highlightSafeZone.address && (
+                  <>
+                    <br />
+                    <span className="text-xs">{highlightSafeZone.address}</span>
+                  </>
+                )}
+              </Popup>
+            </Marker>
+            <Circle
+              center={[highlightSafeZone.lat, highlightSafeZone.lng]}
+              radius={120}
+              pathOptions={{
+                color: '#a855f7',
+                fillColor: '#a855f7',
+                fillOpacity: 0.15,
+                weight: 2,
+              }}
+            />
+          </>
+        )}
 
       {showReportLayer &&
         highlightPhotoLocation &&

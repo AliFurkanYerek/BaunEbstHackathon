@@ -61,7 +61,7 @@ export function groupDistributionByCity(distribution, safeZones) {
   );
 }
 
-function cityMatchKey(name) {
+export function cityMatchKey(name) {
   return (name || '').trim().toLocaleUpperCase('tr');
 }
 

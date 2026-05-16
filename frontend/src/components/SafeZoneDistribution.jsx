@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react';
-import { groupDistributionByCity } from '../utils/safeZonesByCity.js';
+import { useMemo, useState, useEffect } from 'react';
+import CityZoneFilter from './CityZoneFilter.jsx';
+import {
+  ALL_CITIES,
+  cityMatchKey,
+  groupDistributionByCity,
+} from '../utils/safeZonesByCity.js';
 
 function ZoneRows({ rows }) {
   return (
@@ -67,15 +72,36 @@ function ZoneRows({ rows }) {
   );
 }
 
-export default function SafeZoneDistribution({ distribution, safeZones = [] }) {
+export default function SafeZoneDistribution({
+  distribution,
+  safeZones = [],
+  zonesByCity = [],
+  selectedCity = ALL_CITIES,
+  onSelectCity,
+  totalZoneCount = 0,
+}) {
   const cityGroups = useMemo(
     () => groupDistributionByCity(distribution, safeZones),
     [distribution, safeZones]
   );
 
+  const visibleGroups = useMemo(() => {
+    if (!selectedCity || selectedCity === ALL_CITIES) return cityGroups;
+    const key = cityMatchKey(selectedCity);
+    return cityGroups.filter((g) => cityMatchKey(g.city) === key);
+  }, [cityGroups, selectedCity]);
+
+  const singleCityMode = selectedCity && selectedCity !== ALL_CITIES;
+
   const [expanded, setExpanded] = useState(() =>
     Object.fromEntries(cityGroups.map((g) => [g.city, g.totalAssigned > 0 || (g.totalArrived ?? 0) > 0]))
   );
+
+  useEffect(() => {
+    if (singleCityMode && visibleGroups.length === 1) {
+      setExpanded((prev) => ({ ...prev, [visibleGroups[0].city]: true }));
+    }
+  }, [singleCityMode, visibleGroups]);
 
   const toggle = (city) => {
     setExpanded((prev) => ({ ...prev, [city]: !prev[city] }));
@@ -83,22 +109,59 @@ export default function SafeZoneDistribution({ distribution, safeZones = [] }) {
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-800">
-        <h3 className="font-semibold text-white">Güvenli Bölge Dağılımı</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          Doluluk, binalardan yönlendirilen kişi + kullanıcı &quot;buradayım&quot; bildirimi toplamına göredir.
-          Yeşil sütunlar: ulaşan kişi sayısına göre gönderilmesi önerilen malzeme (su 3 L/kişi, gıda 2 öğün/kişi,
-          battaniye 1/kişi).
-        </p>
+      <div className="px-4 py-3 border-b border-slate-800 space-y-3">
+        <div>
+          <h3 className="font-semibold text-white">Güvenli Bölge Dağılımı</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Doluluk, binalardan yönlendirilen kişi + kullanıcı &quot;buradayım&quot; bildirimi toplamına
+            göredir. Harita ile aynı şehir seçimi kullanılır.
+          </p>
+        </div>
+        {zonesByCity?.length > 0 && onSelectCity && (
+          <CityZoneFilter
+            groups={zonesByCity}
+            selectedCity={selectedCity}
+            onSelectCity={onSelectCity}
+            totalCount={totalZoneCount}
+          />
+        )}
       </div>
       <div className="divide-y divide-slate-800 max-h-[520px] overflow-y-auto">
-        {cityGroups.map((group) => {
-          const isOpen = expanded[group.city] ?? false;
+        {visibleGroups.length === 0 ? (
+          <p className="p-6 text-center text-sm text-slate-500">
+            Bu il için dağılım verisi yok veya henüz yönlendirme yapılmadı.
+          </p>
+        ) : (
+        visibleGroups.map((group) => {
+          const isOpen = singleCityMode || (expanded[group.city] ?? false);
           const activeRows = group.rows.filter((r) => r.assignedPeople > 0 || (r.arrivedPeople ?? 0) > 0);
           const displayRows = isOpen ? group.rows : activeRows.length ? activeRows : group.rows.slice(0, 5);
 
           return (
             <section key={group.city}>
+              {singleCityMode ? (
+                <div className="px-4 py-3 flex items-center justify-between gap-2 border-b border-slate-800/80">
+                  <div>
+                    <span className="font-medium text-white">{group.city}</span>
+                    <span className="text-xs text-slate-500 ml-2">{group.zoneCount} alan</span>
+                  </div>
+                  <div className="text-right text-xs shrink-0 space-y-0.5">
+                    <div>
+                      <span className="text-indigo-300">
+                        yönlen.: {group.totalAssigned.toLocaleString('tr-TR')}
+                      </span>
+                      {(group.totalArrived ?? 0) > 0 && (
+                        <span className="text-emerald-400 ml-2">
+                          · ulaşan: {(group.totalArrived ?? 0).toLocaleString('tr-TR')}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-slate-500 block">
+                      kapasite: {group.totalCapacity.toLocaleString('tr-TR')}
+                    </span>
+                  </div>
+                </div>
+              ) : (
               <button
                 type="button"
                 onClick={() => toggle(group.city)}
@@ -124,6 +187,7 @@ export default function SafeZoneDistribution({ distribution, safeZones = [] }) {
                   </span>
                 </div>
               </button>
+              )}
               {isOpen && (
                 <div className="table-scroll px-2 pb-3 overflow-x-auto">
                   <ZoneRows rows={displayRows} />
@@ -136,7 +200,8 @@ export default function SafeZoneDistribution({ distribution, safeZones = [] }) {
               )}
             </section>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

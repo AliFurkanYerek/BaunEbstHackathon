@@ -1,14 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
-import { ALL_CITIES } from '../utils/safeZonesByCity.js';
-
 /**
  * Kullanıcı güvenli bölgeye ulaştığını bildirir (doluluk ve malzeme için yetkili panele düşer).
  */
 export default function SafeZoneCheckIn({
   zonesByCity,
-  selectedMapCity,
-  nearestInfo,
   onArrival,
+  selectedZoneId = '',
+  onZoneSelect,
 }) {
   const [checkInCity, setCheckInCity] = useState('');
   const [zoneId, setZoneId] = useState('');
@@ -26,43 +24,29 @@ export default function SafeZoneCheckIn({
     return g?.zones || [];
   }, [checkInCity, zonesByCity]);
 
-  // Harita il filtresi ile aynı ili öner
-  const effectiveCity =
-    selectedMapCity && selectedMapCity !== ALL_CITIES ? selectedMapCity : checkInCity;
-
   useEffect(() => {
     setZoneId('');
-  }, [selectedMapCity, checkInCity]);
+    onZoneSelect?.(null);
+  }, [checkInCity]);
 
-  const zonesForDropdown = useMemo(() => {
-    if (selectedMapCity && selectedMapCity !== ALL_CITIES) {
-      const g = zonesByCity?.find((x) => x.city === selectedMapCity);
-      return g?.zones || [];
+  useEffect(() => {
+    if (selectedZoneId && selectedZoneId !== zoneId) {
+      setZoneId(selectedZoneId);
     }
-    return zonesInSelectedCity;
-  }, [selectedMapCity, zonesByCity, zonesInSelectedCity]);
+  }, [selectedZoneId]);
+
+  const zonesForDropdown = zonesInSelectedCity;
 
   const submit = (e) => {
     e.preventDefault();
     const zid = zoneId;
     if (!zid) {
-      setMsg('Listeden toplanma alanı seçin (veya yukarıdan “en yakın alan” butonunu kullanın).');
+      setMsg('Listeden toplanma alanı seçin.');
       return;
     }
     const n = Math.max(1, Math.min(5000, Number(peopleCount) || 1));
     onArrival({ zoneId: zid, peopleCount: n });
     setMsg('Bildiriminiz kaydedildi. Yetkili panelinde doluluk güncellendi.');
-    setPeopleCount(1);
-  };
-
-  const quickNearest = () => {
-    if (!nearestInfo?.id) {
-      setMsg('Önce haritada konumunuzu işaretleyerek en yakın alanı görün.');
-      return;
-    }
-    const n = Math.max(1, Math.min(5000, Number(peopleCount) || 1));
-    onArrival({ zoneId: nearestInfo.id, peopleCount: n });
-    setMsg(`“${nearestInfo.name}” alanı için ulaştım bildirimi kaydedildi.`);
     setPeopleCount(1);
   };
 
@@ -88,44 +72,34 @@ export default function SafeZoneCheckIn({
         />
       </div>
 
-      {nearestInfo?.id && (
-        <button
-          type="button"
-          onClick={quickNearest}
-          className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors"
-        >
-          En yakın alana ulaştım: <span className="font-semibold">{nearestInfo.name}</span>
-          {nearestInfo.il ? ` (${nearestInfo.il})` : ''}
-        </button>
-      )}
-
-      <form onSubmit={submit} className="space-y-2 pt-1 border-t border-emerald-800/40">
-        <p className="text-xs text-slate-500">Manuel seçim</p>
-        {(!selectedMapCity || selectedMapCity === ALL_CITIES) && (
-          <select
-            value={checkInCity}
-            onChange={(e) => {
-              setCheckInCity(e.target.value);
-              setZoneId('');
-            }}
-            className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm"
-          >
-            <option value="">İl seçin</option>
-            {cityOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        )}
+      <form onSubmit={submit} className="space-y-2">
+        <p className="text-xs text-slate-500">Toplanma alanı seçin (harita altta güncellenir)</p>
         <select
-          value={zoneId}
-          onChange={(e) => setZoneId(e.target.value)}
+          value={checkInCity}
+          onChange={(e) => {
+            setCheckInCity(e.target.value);
+            setZoneId('');
+            onZoneSelect?.(null);
+          }}
           className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm"
         >
-          <option value="">
-            {effectiveCity && effectiveCity !== ALL_CITIES ? 'Toplanma alanı seçin' : 'Önce il seçin'}
-          </option>
+          <option value="">İl seçin</option>
+          {cityOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={zoneId}
+          onChange={(e) => {
+            const id = e.target.value;
+            setZoneId(id);
+            onZoneSelect?.(id || null);
+          }}
+          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm"
+        >
+          <option value="">{checkInCity ? 'Toplanma alanı seçin' : 'Önce il seçin'}</option>
           {zonesForDropdown.map((z) => (
             <option key={z.id} value={z.id}>
               {z.name?.slice(0, 80)}

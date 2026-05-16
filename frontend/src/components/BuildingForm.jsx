@@ -38,7 +38,6 @@ export default function BuildingForm({ onSubmit, selectedCoords, onClearCoords }
       peopleCount: Number(e.target.peopleCount.value),
       damageLevel: Number(e.target.damageLevel.value),
       emergencyTypes: [...emergencyTypes],
-      description: e.target.description.value,
       lat: Number(lat),
       lng: Number(lng),
     });
@@ -139,17 +138,6 @@ export default function BuildingForm({ onSubmit, selectedCoords, onClearCoords }
           </p>
         )}
       </fieldset>
-
-      <label className="block">
-        <span className="text-xs text-slate-400">Açıklama</span>
-        <textarea
-          name="description"
-          rows={2}
-          disabled={!coordReady}
-          className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm resize-none disabled:opacity-50"
-          placeholder="Ek bilgi..."
-        />
-      </label>
 
       <button
         type="submit"

@@ -9,6 +9,8 @@ export default function SafeZonesByCityList({
   zonesByCity,
   selectedCity,
   onSelectCity,
+  selectedZoneId = null,
+  onSelectZone,
 }) {
   const filtered = useMemo(
     () => filterZonesByCity(safeZones, selectedCity),
@@ -41,7 +43,16 @@ export default function SafeZonesByCityList({
 
       <ul className="space-y-1.5 text-sm text-slate-400 max-h-48 overflow-y-auto">
         {visible.map((z) => (
-          <li key={z.id} className="flex justify-between gap-2 border-b border-slate-800/60 pb-1.5">
+          <li key={z.id}>
+            <button
+              type="button"
+              onClick={() => onSelectZone?.(z.id)}
+              className={`w-full flex justify-between gap-2 border-b border-slate-800/60 pb-1.5 text-left transition-colors rounded px-1 -mx-1 ${
+                selectedZoneId === z.id
+                  ? 'bg-indigo-950/60 ring-1 ring-indigo-500/50'
+                  : 'hover:bg-slate-800/50'
+              }`}
+            >
             <span className="min-w-0 truncate">
               🛡️ {z.name}
               {selectedCity === ALL_CITIES && z.il && (
@@ -49,6 +60,7 @@ export default function SafeZonesByCityList({
               )}
             </span>
             <span className="text-slate-500 shrink-0">{z.capacity} kişi</span>
+            </button>
           </li>
         ))}
       </ul>
