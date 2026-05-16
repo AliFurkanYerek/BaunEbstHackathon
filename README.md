@@ -8,7 +8,14 @@ Deprem sonrası bina bildirimi, risk analizi ve güvenli bölge koordinasyonu �
 cd frontend
 npm install
 cp .env.example .env
-# .env içine Gemini API anahtarınızı yazın
+# .env içine Gemini API anahtarınızı yazın (chatbot için)
+
+# Terminal 1 — analiz sunucusu (Flask, port 5000)
+npm run api
+# veya: cd ../inference-api && pip install -r requirements.txt && copy .env.example .env
+# inference-api/.env içinde ROBOFLOW_API_KEY doldurun, sonra: python app.py
+
+# Terminal 2 — arayüz (Vite /api isteklerini 5000'e proxy eder)
 npm run dev
 ```
 

@@ -2,7 +2,19 @@ import { useState, useEffect, Fragment } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getEmergencyLabels, normalizeEmergencyTypes } from '../data/sampleData.js';
+import {
+  calculatePhotoRiskScore,
+  PHOTO_LOCATION_RADIUS_M,
+} from '../utils/riskAggregation.js';
 import AssemblyPointCluster from './AssemblyPointCluster.jsx';
+import HospitalCluster from './HospitalCluster.jsx';
+import MapRouteLayer from './MapRouteLayer.jsx';
+import {
+  MAP_LAYER_ALL,
+  showsHospitals,
+  showsReports,
+  showsSafeZones,
+} from '../utils/mapLayerFilter.js';
 
 const DAMAGE_COLORS = {
   1: '#22c55e',
@@ -38,6 +50,14 @@ const selectedIcon = L.divIcon({
   iconAnchor: [14, 14],
 });
 
+const photoReportIcon = L.divIcon({
+  className: '',
+  html:
+    '<div style="width:30px;height:30px;background:#c2410c;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">E</div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
+
 function MapClickHandler({ onMapClick, enabled }) {
   useMapEvents({
     click(e) {
@@ -60,6 +80,35 @@ function MapResizer() {
     };
   }, [map]);
   return null;
+}
+
+/** Yeni analiz veya odaklanılan konuma haritayı kaydırır */
+function FlyToHighlight({ lat, lng, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    map.flyTo([lat, lng], zoom ?? 14, { duration: 0.85 });
+  }, [lat, lng, zoom, map]);
+  return null;
+}
+
+function PhotoReportPopupContent({ report }) {
+  const risk = calculatePhotoRiskScore(report);
+  return (
+    <div className="text-slate-800 text-sm min-w-[200px]">
+      <p className="font-bold">Enkaz / hasar fotoğrafı</p>
+      <p className="text-xs text-slate-600">{report.fileName}</p>
+      {report.address && <p className="text-xs mt-1">{report.address}</p>}
+      <p className="text-xs mt-1">
+        Yıkık tespit: <strong>{report.collapsed ?? 0}</strong> · Hasar önerisi:{' '}
+        {report.suggestedDamageLevel ?? '—'}/5
+      </p>
+      <p className="text-xs">Risk puanı: {risk}</p>
+      <p className="text-[10px] text-slate-500 mt-1">
+        {report.lat.toFixed(5)}, {report.lng.toFixed(5)}
+      </p>
+    </div>
+  );
 }
 
 function BuildingPopupContent({ building }) {
@@ -97,9 +146,28 @@ export default function MapView({
   mapClickEnabled = false,
   selectedPosition = null,
   showRiskHeat = false,
+  highlightPhotoLocation = null,
+  photoReports = [],
+  hospitals = [],
+  mapLayer = MAP_LAYER_ALL,
+  navigationRoute = null,
 }) {
-  const useAfadCluster = assemblyPoints.length > 0;
+  const showSafe = showsSafeZones(mapLayer);
+  const showHospitalLayer = showsHospitals(mapLayer);
+  const showReportLayer = showsReports(mapLayer);
+
+  const visibleAssembly = showSafe ? assemblyPoints : [];
+  const visibleHospitals = showHospitalLayer ? hospitals : [];
+  const visibleBuildings = showReportLayer ? buildings : [];
+  const visiblePhotoReports = showReportLayer ? photoReports : [];
+
+  const useAfadCluster = visibleAssembly.length > 0;
+  const showHospitalCluster = visibleHospitals.length > 0;
   const [mounted, setMounted] = useState(false);
+
+  const savedPhotoMarkers = visiblePhotoReports.filter(
+    (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -127,9 +195,14 @@ export default function MapView({
       <MapResizer />
       <MapClickHandler onMapClick={onMapClick} enabled={mapClickEnabled} />
 
+      {navigationRoute?.positions?.length > 0 && <MapRouteLayer route={navigationRoute} />}
+
+      {showHospitalCluster && <HospitalCluster points={visibleHospitals} />}
+
       {useAfadCluster ? (
-        <AssemblyPointCluster points={assemblyPoints} />
+        <AssemblyPointCluster points={visibleAssembly} />
       ) : (
+        showSafe &&
         safeZones.map((zone) => (
           <Fragment key={zone.id}>
             <Marker position={[zone.lat, zone.lng]} icon={safeIcon}>
@@ -153,7 +226,38 @@ export default function MapView({
         </Marker>
       )}
 
-      {buildings.map((b) => (
+      {showReportLayer &&
+        highlightPhotoLocation &&
+        Number.isFinite(highlightPhotoLocation.lat) &&
+        Number.isFinite(highlightPhotoLocation.lng) && (
+          <FlyToHighlight
+            lat={highlightPhotoLocation.lat}
+            lng={highlightPhotoLocation.lng}
+            zoom={14}
+          />
+        )}
+
+      {savedPhotoMarkers.map((p) => (
+        <Fragment key={p.id}>
+          <Marker position={[p.lat, p.lng]} icon={photoReportIcon}>
+            <Popup>
+              <PhotoReportPopupContent report={p} />
+            </Popup>
+          </Marker>
+          <Circle
+            center={[p.lat, p.lng]}
+            radius={PHOTO_LOCATION_RADIUS_M}
+            pathOptions={{
+              color: '#ea580c',
+              fillColor: '#ea580c',
+              fillOpacity: 0.12,
+              weight: 1,
+            }}
+          />
+        </Fragment>
+      ))}
+
+      {visibleBuildings.map((b) => (
         <Fragment key={b.id}>
           <Marker
             position={[b.lat, b.lng]}

@@ -1,3 +1,5 @@
+import { formatUserMessage } from './formatUserMessage.js';
+
 const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -49,9 +51,14 @@ ${context.selectedLocation ? `Kullanıcının haritada seçtiği konum: enlem ${
 
 ${context.nearestZone ? `EN YAKIN GÜVENLİ BÖLGE: ${context.nearestZone.name}, yaklaşık ${context.nearestZone.distanceKm} km, koordinat (${context.nearestZone.lat}, ${context.nearestZone.lng})` : ''}
 
+${context.nearestHospital ? `EN YAKIN HASTANE: ${context.nearestHospital.name}${context.nearestHospital.il ? ` (${context.nearestHospital.il})` : ''}, yaklaşık ${context.nearestHospital.distanceKm} km` : ''}
+
+${context.hospitalsWithDistance?.length ? `Yakındaki hastaneler (örnek):\n${context.hospitalsWithDistance.map((h) => `- ${h.name}${h.il ? ` (${h.il})` : ''}: ${h.distanceKm} km`).join('\n')}` : ''}
+
 SORU REHBERİ:
 - "En yakın güvenli alan nerede?" → En yakın bölgeyi ad ve mesafe ile söyle; haritada mor kare olduğunu belirt.
-- "Buradan güvenli alana nasıl gidebilirim?" → Yürüyüş güvenliyse yön tarifi ver; yıkık bina/enkaz varsa uzak dur, alternatif güvenli bölge öner; araç kullanma konusunda dikkatli ol.
+- "Buradan güvenli alana nasıl gidebilirim?" → Kullanıcı haritada konum seçtiyse uygulama haritada turkuaz yürüyüş rotasını çizer; bunu belirt. Yürüyüş güvenliyse kısa yön ipuçları ver; yıkık bina/enkaz varsa uzak dur; araç kullanma konusunda dikkatli ol. Konum seçilmediyse önce haritaya tıklamasını söyle.
+- "En yakın hastaneye nasıl giderim?" → En yakın hastaneyi ad ve mesafe ile söyle; uygulama haritada yürüyüş rotasını çizer (kırmızı hastane işareti). Yaralı/ acil durumda 112'yi de ara. Konum seçilmediyse önce haritaya tıklamasını söyle.
 - "Enkaz altında biri var ne yapmalıyım?" → HEMEN 112/AFAD ara; kendin kazma yapma; seslen; su/ilaç verme; gaz kaçağı/yangın riskine dikkat; uygulamadan acil bildirim yapmayı öner.
 
 Kısa, madde madde, uygulanabilir cevaplar ver. Panik yaratma.`;
@@ -94,9 +101,8 @@ export async function sendGeminiMessage(messages, context = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const msg =
-      data?.error?.message ||
-      `Gemini API hatası (${res.status})`;
+    const raw = data?.error?.message ?? data?.error;
+    const msg = formatUserMessage(raw) || `Gemini API hatası (${res.status})`;
     throw new Error(msg);
   }
 

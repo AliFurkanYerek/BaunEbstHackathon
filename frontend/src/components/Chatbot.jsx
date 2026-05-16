@@ -4,11 +4,22 @@ import {
   getGeminiApiKey,
   setGeminiApiKey,
 } from '../utils/gemini.js';
+import { formatUserMessage } from '../utils/formatUserMessage.js';
+import { wantsRouteToSafeZone, wantsRouteToHospital } from '../utils/routeIntent.js';
 
 const WELCOME =
-  'Merhaba! Ben afet asistanınızım. Haritada konumunuzu seçerseniz size en yakın güvenli alanı söyleyebilirim. Aşağıdaki öne çıkan sorulardan birine tıklayabilir veya kendi sorunuzu yazabilirsiniz.';
+  'Merhaba! Ben afet asistanınızım. Haritada konumunuzu seçerseniz en yakın güvenli alanı veya hastaneyi söyleyebilir, haritada yürüyüş rotasını çizebilirim. Aşağıdaki öne çıkan sorulardan birine tıklayabilir veya kendi sorunuzu yazabilirsiniz.';
 
-export default function Chatbot({ safeZones, zonesByCity, selectedCoords, nearestInfo }) {
+export default function Chatbot({
+  safeZones,
+  zonesByCity,
+  hospitals = [],
+  selectedCoords,
+  nearestInfo,
+  nearestHospital,
+  onShowRouteToNearest,
+  onShowRouteToNearestHospital,
+}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: 'model', text: WELCOME },
@@ -54,6 +65,53 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
           })
           .sort((a, b) => a.distanceKm - b.distanceKm)
       : safeZones.map((z) => ({ name: z.name, lat: z.lat, lng: z.lng, distanceKm: null })),
+    hospitalsWithDistance: selectedCoords
+      ? hospitals
+          .filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lng))
+          .map((h) => {
+            const R = 6371;
+            const dLat = ((h.lat - selectedCoords.lat) * Math.PI) / 180;
+            const dLng = ((h.lng - selectedCoords.lng) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) ** 2 +
+              Math.cos((selectedCoords.lat * Math.PI) / 180) *
+                Math.cos((h.lat * Math.PI) / 180) *
+                Math.sin(dLng / 2) ** 2;
+            const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return {
+              name: h.name,
+              lat: h.lat,
+              lng: h.lng,
+              il: h.il,
+              distanceKm: Math.round(dist * 100) / 100,
+            };
+          })
+          .sort((a, b) => a.distanceKm - b.distanceKm)
+          .slice(0, 15)
+      : [],
+    nearestHospital,
+  };
+
+  const appendRouteHint = async (questionText, reply) => {
+    if (wantsRouteToHospital(questionText) && onShowRouteToNearestHospital) {
+      const routeResult = await onShowRouteToNearestHospital();
+      if (!routeResult?.ok) {
+        return `${reply}\n\n🏥 ${routeResult?.error || 'Hastane rotası gösterilemedi.'}`;
+      }
+      const extra = routeResult.isEstimate
+        ? ' (sokak rotası alınamadı, düz çizgi)'
+        : '';
+      return `${reply}\n\n🏥 Haritada ${routeResult.hospitalName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`;
+    }
+    if (!wantsRouteToSafeZone(questionText) || !onShowRouteToNearest) return reply;
+    const routeResult = await onShowRouteToNearest();
+    if (!routeResult?.ok) {
+      return `${reply}\n\n🗺️ ${routeResult?.error || 'Rota gösterilemedi.'}`;
+    }
+    const extra = routeResult.isEstimate
+      ? ' (sokak rotası alınamadı, düz çizgi)'
+      : '';
+    return `${reply}\n\n🗺️ Haritada ${routeResult.zoneName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`;
   };
 
   const handleSend = async (e) => {
@@ -70,10 +128,11 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
 
     try {
       const history = nextMessages.filter((m) => m.role === 'user' || m.role === 'model');
-      const reply = await sendGeminiMessage(history, context);
+      let reply = await sendGeminiMessage(history, context);
+      reply = await appendRouteHint(text, reply);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+      setError(formatUserMessage(err?.message ?? err) || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -89,6 +148,7 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
   const quickQuestions = [
     'En yakın güvenli alan nerede?',
     'Buradan güvenli alana nasıl gidebilirim?',
+    'En yakın hastaneye nasıl giderim?',
     'Enkaz altında biri var, ne yapmalıyım?',
   ];
 
@@ -102,10 +162,11 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
     setLoading(true);
     try {
       const history = nextMessages.filter((m) => m.role === 'user' || m.role === 'model');
-      const reply = await sendGeminiMessage(history, context);
+      let reply = await sendGeminiMessage(history, context);
+      reply = await appendRouteHint(question, reply);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+      setError(formatUserMessage(err?.message ?? err) || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -188,7 +249,7 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
                       : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-bl-md'
                   }`}
                 >
-                  {m.text}
+                  {formatUserMessage(m.text)}
                 </div>
               </div>
             ))}
@@ -203,7 +264,7 @@ export default function Chatbot({ safeZones, zonesByCity, selectedCoords, neares
 
           {error && (
             <p className="shrink-0 px-3 py-1 text-xs text-red-400 border-t border-slate-800">
-              {error}
+              {formatUserMessage(error)}
             </p>
           )}
 

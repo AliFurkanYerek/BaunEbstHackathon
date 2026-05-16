@@ -8,7 +8,7 @@
     "build": "cd frontend && npm run build",
     "preview": "cd frontend && npm run preview",
     "install:all": "cd frontend && npm install",
-    "api": "cd inference-api && python app.py",
-    "api:install": "cd inference-api && pip install -r requirements.txt"
+    "api": "python inference-api/app.py",
+    "api:install": "pip install -r inference-api/requirements.txt"
   }
 }

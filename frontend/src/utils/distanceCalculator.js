@@ -25,3 +25,18 @@ export function findNearestSafeZone(lat, lng, safeZones) {
   }
   return nearest;
 }
+
+export function findNearestHospital(lat, lng, hospitals) {
+  if (!hospitals?.length) return null;
+  let nearest = null;
+  let minDist = Infinity;
+  for (const h of hospitals) {
+    if (!Number.isFinite(h.lat) || !Number.isFinite(h.lng)) continue;
+    const dist = distanceKm(lat, lng, h.lat, h.lng);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = { ...h, distanceKm: Math.round(dist * 100) / 100 };
+    }
+  }
+  return nearest;
+}

@@ -61,8 +61,13 @@ export function groupDistributionByCity(distribution, safeZones) {
   );
 }
 
-/** Seçilen şehre göre bölge listesini filtreler */
+function cityMatchKey(name) {
+  return (name || '').trim().toLocaleUpperCase('tr');
+}
+
+/** Seçilen şehre göre bölge listesini filtreler (il adı büyük/küçük harf duyarsız) */
 export function filterZonesByCity(zones, selectedCity) {
   if (!selectedCity || selectedCity === ALL_CITIES) return zones;
-  return zones.filter((z) => getZoneCity(z) === selectedCity);
+  const key = cityMatchKey(selectedCity);
+  return zones.filter((z) => cityMatchKey(getZoneCity(z)) === key);
 }

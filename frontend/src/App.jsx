@@ -6,11 +6,17 @@ import { STORAGE_KEY } from './data/sampleData.js';
 import { enrichAllBuildings } from './utils/buildingEnricher.js';
 import { sortByRisk } from './utils/riskCalculator.js';
 import { useAssemblyPoints, toSafeZones } from './hooks/useAssemblyPoints.js';
+import { useHospitals } from './hooks/useHospitals.js';
 import { groupSafeZonesByCity } from './utils/safeZonesByCity.js';
 import {
   loadZoneArrivals,
   saveZoneArrivals,
 } from './utils/zoneArrivals.js';
+import {
+  loadPhotoReports,
+  savePhotoReports,
+  createPhotoReport,
+} from './utils/photoDamageStorage.js';
 
 let idCounter = Date.now();
 
@@ -38,10 +44,12 @@ export default function App() {
     provinces: zoneProvinces,
     isPartialCoverage,
   } = useAssemblyPoints();
+  const { hospitals, loading: hospitalsLoading, count: hospitalCount } = useHospitals();
   const safeZones = useMemo(() => toSafeZones(assemblyPoints), [assemblyPoints]);
   const zonesByCity = useMemo(() => groupSafeZonesByCity(safeZones), [safeZones]);
   const [rawBuildings, setRawBuildings] = useState(loadBuildings);
   const [zoneArrivals, setZoneArrivals] = useState(loadZoneArrivals);
+  const [photoReports, setPhotoReports] = useState(loadPhotoReports);
 
   const buildings = useMemo(
     () => sortByRisk(enrichAllBuildings(rawBuildings, safeZones)),
@@ -56,6 +64,10 @@ export default function App() {
     saveZoneArrivals(zoneArrivals);
   }, [zoneArrivals]);
 
+  useEffect(() => {
+    savePhotoReports(photoReports);
+  }, [photoReports]);
+
   const handleAddBuilding = useCallback((formData) => {
     const raw = {
       id: `bina-${++idCounter}`,
@@ -63,6 +75,19 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setRawBuildings((prev) => [...prev, raw]);
+  }, []);
+
+  const handlePhotoReport = useCallback((payload) => {
+    if (!payload?.geo || !payload?.analysis) return;
+    setPhotoReports((prev) => [...prev, createPhotoReport(payload)]);
+  }, []);
+
+  const handleDeletePhotoReport = useCallback((id) => {
+    setPhotoReports((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const handleDeleteBuilding = useCallback((id) => {
+    setRawBuildings((prev) => prev.filter((b) => b.id !== id));
   }, []);
 
   const handleZoneArrival = useCallback(({ zoneId, peopleCount }) => {
@@ -81,9 +106,11 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-slate-950">
       <Navbar activePlatform={platform} onPlatformChange={setPlatform} />
-      {zonesLoading && (
+      {(zonesLoading || hospitalsLoading) && (
         <div className="shrink-0 px-4 py-1.5 bg-indigo-950/50 text-center text-xs text-indigo-300">
-          AFAD toplanma alanları yükleniyor...
+          {zonesLoading && 'AFAD toplanma alanları yükleniyor...'}
+          {zonesLoading && hospitalsLoading && ' · '}
+          {hospitalsLoading && 'Hastane konumları yükleniyor...'}
         </div>
       )}
       {!zonesLoading && zoneCount > 0 && (
@@ -116,6 +143,8 @@ export default function App() {
             safeZones={safeZones}
             zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
+            hospitals={hospitals}
+            hospitalCount={hospitalCount}
             onAddBuilding={handleAddBuilding}
             onZoneArrival={handleZoneArrival}
           />
@@ -125,7 +154,13 @@ export default function App() {
             safeZones={safeZones}
             zonesByCity={zonesByCity}
             assemblyPoints={assemblyPoints}
+            hospitals={hospitals}
+            hospitalCount={hospitalCount}
             zoneArrivals={zoneArrivals}
+            photoReports={photoReports}
+            onPhotoReportSaved={handlePhotoReport}
+            onDeletePhotoReport={handleDeletePhotoReport}
+            onDeleteBuilding={handleDeleteBuilding}
           />
         )}
       </main>

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "python ../inference-api/app.py",
     "build": "vite build",
     "preview": "vite preview",
     "build:afad": "node scripts/build-afad-toplanma.mjs",

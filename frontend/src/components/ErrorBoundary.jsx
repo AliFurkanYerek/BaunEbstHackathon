@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { formatUserMessage } from '../utils/formatUserMessage.js';
 
 export default class ErrorBoundary extends Component {
   state = { error: null };
@@ -13,7 +14,9 @@ export default class ErrorBoundary extends Component {
         <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
           <div className="max-w-md p-6 rounded-xl bg-red-950/50 border border-red-800 text-red-200">
             <h2 className="text-lg font-bold mb-2">Uygulama hatası</h2>
-            <p className="text-sm font-mono break-all">{this.state.error.message}</p>
+            <p className="text-sm font-mono break-all">
+              {formatUserMessage(this.state.error?.message ?? this.state.error)}
+            </p>
             <button
               type="button"
               onClick={() => window.location.reload()}

@@ -1,13 +1,17 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { analyzeImage, checkInferenceBackend, getDatasetUrls } from '../utils/roboflow.js';
+import { geolocatePhoto } from '../utils/geoPhoto.js';
+import { formatUserMessage } from '../utils/formatUserMessage.js';
 
-export default function BuildingDamageAnalyzer() {
+export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSaved }) {
   const [backendStatus, setBackendStatus] = useState(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [geoInfo, setGeoInfo] = useState(null);
+  const [geoLoading, setGeoLoading] = useState(false);
   const canvasRef = useRef(null);
   const imgRef = useRef(null);
 
@@ -33,20 +37,77 @@ export default function BuildingDamageAnalyzer() {
     setPreview(URL.createObjectURL(f));
     setResult(null);
     setError('');
+    setGeoInfo(null);
+    onPhotoLocated?.(null);
+    onPhotoReportSaved?.(null);
   };
 
   const runAnalysis = async () => {
     if (!file) return;
     setLoading(true);
+    setGeoLoading(true);
     setError('');
+    setGeoInfo(null);
+    onPhotoLocated?.(null);
+    onPhotoReportSaved?.(null);
+
+    let analysisData = null;
+
     try {
-      const data = await analyzeImage(file);
-      setResult(data);
-    } catch (e) {
-      setError(e.message || 'Analiz başarısız');
-      setResult(null);
+      try {
+        analysisData = await analyzeImage(file);
+        setResult(analysisData);
+      } catch (e) {
+        setError(formatUserMessage(e.message) || 'Analiz başarısız');
+        setResult(null);
+      }
+
+      try {
+        const g = await geolocatePhoto(file);
+        if (g.status === 'success' && g.locations?.[0]) {
+          const loc = g.locations[0];
+          const lat = Number(loc.latitude);
+          const lng = Number(loc.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const payload = {
+              lat,
+              lng,
+              address: loc.address || '',
+              confidence: loc.confidence != null ? Number(loc.confidence) : undefined,
+              reasoning: loc.reasoning || '',
+              source: g.source || g.engine || 'geoseeer',
+            };
+            setGeoInfo({ ok: true, ...payload });
+            onPhotoLocated?.(payload);
+            if (analysisData) {
+              onPhotoReportSaved?.({
+                fileName: file.name,
+                analysis: analysisData,
+                geo: payload,
+              });
+            }
+          } else {
+            setGeoInfo({ ok: false, error: 'Konum koordinatları okunamadı' });
+          }
+        } else {
+          setGeoInfo({
+            ok: false,
+            error:
+              formatUserMessage(g.error) ||
+              (g.status === 'unavailable'
+                ? 'GPS yok ve GEOSEER_API_KEY tanımlı değil (inference-api/.env)'
+                : 'Konum tespit edilemedi'),
+          });
+        }
+      } catch (geoErr) {
+        setGeoInfo({
+          ok: false,
+          error: formatUserMessage(geoErr?.message ?? geoErr) || 'Konum servisi hatası',
+        });
+      }
     } finally {
       setLoading(false);
+      setGeoLoading(false);
     }
   };
 
@@ -95,6 +156,8 @@ export default function BuildingDamageAnalyzer() {
             </span>
           ))}{' '}
           · sınıf: <strong className="text-slate-300">collapsed</strong>
+          <br />
+          Hasar tespitinden sonra konum: EXIF GPS veya GeoSeer ile haritada pembe 📷 işareti.
         </p>
       </div>
 
@@ -166,8 +229,42 @@ export default function BuildingDamageAnalyzer() {
           disabled={!file || loading || !backendOk}
           className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? 'Roboflow analiz ediyor…' : 'Yıkık bina (enkaz) tespit et'}
+          {loading || geoLoading
+            ? geoLoading && !loading
+              ? 'Konum bulunuyor (GeoSeer)…'
+              : loading && geoLoading
+                ? 'Hasar + konum analizi…'
+                : 'Roboflow analiz ediyor…'
+            : 'Yıkık bina (enkaz) tespit et'}
         </button>
+
+        {geoInfo && (
+          <div
+            className={`text-sm rounded-lg px-3 py-2 border ${
+              geoInfo.ok
+                ? 'bg-pink-950/30 border-pink-800/50 text-pink-100'
+                : 'bg-amber-950/30 border-amber-800/50 text-amber-100'
+            }`}
+          >
+            {geoInfo.ok ? (
+              <>
+                <p className="font-medium">📍 Konum haritada gösterildi</p>
+                {geoInfo.address && <p className="text-xs mt-1 opacity-90">{geoInfo.address}</p>}
+                {geoInfo.confidence != null && (
+                  <p className="text-xs mt-1 opacity-80">
+                    Güven:{' '}
+                    {((geoInfo.confidence <= 1 ? geoInfo.confidence * 100 : geoInfo.confidence) || 0).toFixed(
+                      0
+                    )}
+                    % · {geoInfo.source === 'exif' || geoInfo.source === 'exif_gps' ? 'EXIF GPS' : 'GeoSeer'}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>Konum: {geoInfo.error}</p>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">

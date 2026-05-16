@@ -21,21 +21,47 @@ from detectors import (
     parse_classes,
     run_hosted_model,
 )
+from geo_photo import geolocate_via_geoseer, gps_from_exif, normalize_geoseer_api_key
 
-load_dotenv()
+_API_DIR = Path(__file__).resolve().parent
+# npm run api proje kökünden çalışsa bile inference-api/.env okunsun
+load_dotenv(_API_DIR / ".env", override=True)
 
 app = Flask(__name__)
 CORS(app)
 
-API_KEY = os.getenv("ROBOFLOW_API_KEY")
+
+def _env_int(key: str, default: int) -> int:
+    try:
+        return int(str(os.getenv(key) or default).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(key: str, default: float) -> float:
+    try:
+        v = float(str(os.getenv(key) or default).strip())
+        if v != v or abs(v) == float("inf"):
+            return default
+        return v
+    except (TypeError, ValueError):
+        return default
+
+
+API_KEY = (os.getenv("ROBOFLOW_API_KEY") or "").strip()
 API_URL = os.getenv("ROBOFLOW_API_URL", "https://serverless.roboflow.com")
 MODEL_ID = os.getenv("ROBOFLOW_MODEL_ID", DEFAULT_MODEL_ID)
-CONFIDENCE = int(os.getenv("ROBOFLOW_CONFIDENCE", "30"))
-MERGE_IOU = float(os.getenv("ROBOFLOW_MERGE_IOU", "0.42"))
+CONFIDENCE = _env_int("ROBOFLOW_CONFIDENCE", 30)
+MERGE_IOU = _env_float("ROBOFLOW_MERGE_IOU", 0.42)
 CLASS_LIST = parse_classes(os.getenv("ROBOFLOW_CLASSES", "collapsed"))
 USE_WORKFLOW = os.getenv("ROBOFLOW_USE_WORKFLOW", "").lower() in ("1", "true", "yes")
 WORKSPACE = os.getenv("ROBOFLOW_WORKSPACE_NAME", "")
 WORKFLOW_ID = os.getenv("ROBOFLOW_WORKFLOW_ID", "")
+
+def geoseer_api_key() -> str:
+    load_dotenv(_API_DIR / ".env", override=True)
+    return normalize_geoseer_api_key(os.getenv("GEOSEER_API_KEY"))
+
 
 client = None
 if API_KEY:
@@ -229,25 +255,86 @@ def run_analysis_pipeline(temp_path: str, img_w: int, img_h: int) -> dict:
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    mids = parse_model_ids()
-    urls = []
-    for mid in mids:
-        u = dataset_url_for_model_id(mid)
-        if u and u not in urls:
-            urls.append(u)
-    return jsonify(
-        {
-            "ok": True,
-            "roboflowConfigured": bool(API_KEY),
-            "modelId": mids[0] if mids else MODEL_ID,
-            "modelIds": mids,
-            "datasetUrl": urls[0] if urls else DATASET_URL,
-            "datasetUrls": urls,
-            "mergeIou": MERGE_IOU,
-            "classes": CLASS_LIST,
-            "confidence": CONFIDENCE,
-        }
-    )
+    try:
+        mids = parse_model_ids()
+        urls = []
+        for mid in mids:
+            u = dataset_url_for_model_id(mid)
+            if u and u not in urls:
+                urls.append(u)
+        return jsonify(
+            {
+                "ok": True,
+                "roboflowConfigured": bool(API_KEY),
+                "modelId": mids[0] if mids else MODEL_ID,
+                "modelIds": mids,
+                "datasetUrl": urls[0] if urls else DATASET_URL,
+                "datasetUrls": urls,
+                "mergeIou": MERGE_IOU,
+                "classes": CLASS_LIST,
+                "confidence": CONFIDENCE,
+                "geoseerConfigured": bool(geoseer_api_key()),
+            }
+        )
+    except Exception as e:
+        app.logger.exception("GET /api/health")
+        return jsonify({"ok": False, "roboflowConfigured": bool(API_KEY), "error": str(e)}), 500
+
+
+@app.route("/api/photo-geolocate", methods=["POST"])
+def photo_geolocate():
+    """EXIF GPS (varsa) veya GeoSeer ile görsel konum tahmini."""
+    if "image" not in request.files:
+        return jsonify({"status": "error", "error": "Fotoğraf gönderilmedi"}), 400
+
+    image = request.files["image"]
+    if not image.filename:
+        return jsonify({"status": "error", "error": "Geçersiz dosya"}), 400
+
+    suffix = Path(image.filename).suffix or ".jpg"
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+            image.save(temp.name)
+            temp_path = temp.name
+
+        exif_point = gps_from_exif(temp_path)
+        if exif_point:
+            return jsonify(
+                {
+                    "status": "success",
+                    "source": "exif",
+                    "engine": "exif_gps",
+                    "locations": [exif_point],
+                }
+            )
+
+        geo_key = geoseer_api_key()
+        if not geo_key:
+            return jsonify(
+                {
+                    "status": "unavailable",
+                    "error": "Fotoğrafta GPS (EXIF) yok ve inference-api/.env içinde GEOSEER_API_KEY tanımlı değil.",
+                }
+            )
+
+        out = geolocate_via_geoseer(temp_path, geo_key, image.filename)
+        if out.get("status") == "success":
+            merged = dict(out)
+            merged["source"] = "geoseeer"
+            return jsonify(merged)
+
+        merged = dict(out) if isinstance(out, dict) else {"status": "error", "error": str(out)}
+        merged.setdefault("status", "error")
+        return jsonify(merged), 422
+
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 @app.route("/api/analyze-image", methods=["POST"])
@@ -284,8 +371,13 @@ def analyze_image():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
+    port = _env_int("PORT", 5000)
     if not API_KEY:
         print("UYARI: ROBOFLOW_API_KEY eksik — inference-api/.env dosyasını doldurun")
+    else:
+        print(f"ROBOFLOW_API_KEY yüklendi ({API_KEY[:6]}…)")
+    geo = geoseer_api_key()
     print(f"Models: {parse_model_ids()} | merge IoU: {MERGE_IOU}")
-    app.run(debug=True, port=port, host="0.0.0.0")
+    print(f"GeoSeer foto konum: {'etkin (' + geo[:8] + '...)' if geo else 'GEOSEER_API_KEY yok'}")
+    # Windows watchdog yeniden yükleyici bazen 500 / import hatasına yol açar
+    app.run(debug=True, port=port, host="0.0.0.0", use_reloader=False)
