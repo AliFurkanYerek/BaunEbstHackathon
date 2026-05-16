@@ -13,6 +13,10 @@ body {
   @apply bg-slate-950 text-slate-100 antialiased;
 }
 
+.afet-app {
+  background: linear-gradient(165deg, #020617 0%, #0f172a 45%, #1c1917 100%);
+}
+
 .leaflet-container {
   font-family: inherit;
   background: #0f172a;

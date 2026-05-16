@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polygon, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getEmergencyLabels, normalizeEmergencyTypes } from '../data/sampleData.js';
 import {
@@ -15,6 +15,8 @@ import {
   showsReports,
   showsSafeZones,
 } from '../utils/mapLayerFilter.js';
+import { isIncidentHazard } from '../utils/hazardZones.js';
+import { zoneType, zoneRing } from '../utils/riskGeometry.js';
 
 const DAMAGE_COLORS = {
   1: '#22c55e',
@@ -152,7 +154,11 @@ export default function MapView({
   hospitals = [],
   mapLayer = MAP_LAYER_ALL,
   navigationRoute = null,
+  navigationRoutes = null,
+  routeHazards = null,
+  incidentTarget = null,
   scrollWheelZoom = true,
+  offlineMode = false,
 }) {
   const showSafe = showsSafeZones(mapLayer);
   const showHospitalLayer = showsHospitals(mapLayer);
@@ -191,13 +197,57 @@ export default function MapView({
       scrollWheelZoom={scrollWheelZoom}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap'
+        attribution={offlineMode ? '© OSM (önbellek)' : '© OpenStreetMap'}
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <MapResizer />
       <MapClickHandler onMapClick={onMapClick} enabled={mapClickEnabled} />
 
-      {navigationRoute?.positions?.length > 0 && <MapRouteLayer route={navigationRoute} />}
+      {routeHazards?.map((h, i) => {
+        const isOlay = incidentTarget && isIncidentHazard(h, incidentTarget);
+        const zone = h.polygon?.length >= 3 ? { ...h, type: 'polygon', coordinates: h.polygon } : h;
+        if (zoneType(zone) === 'polygon') {
+          return (
+            <Polygon
+              key={h.buildingId || h.reportId || h.id || `hazard-poly-${i}`}
+              positions={zoneRing(zone)}
+              pathOptions={{
+                color: isOlay ? '#22c55e' : '#dc2626',
+                fillColor: isOlay ? '#22c55e' : '#dc2626',
+                fillOpacity: isOlay ? 0.12 : 0.18,
+                weight: isOlay ? 3 : 2,
+                dashArray: isOlay ? '6,4' : undefined,
+              }}
+            />
+          );
+        }
+        return (
+          <Circle
+            key={h.buildingId || h.reportId || h.id || `hazard-${i}`}
+            center={[h.lat, h.lng]}
+            radius={h.radiusM ?? 70}
+            pathOptions={{
+              color: isOlay ? '#22c55e' : h.kind === 'user' ? '#f43f5e' : '#dc2626',
+              fillColor: isOlay ? '#22c55e' : h.kind === 'user' ? '#f43f5e' : '#dc2626',
+              fillOpacity: isOlay ? 0.12 : 0.18,
+              weight: isOlay ? 3 : 2,
+              dashArray: isOlay ? '6,4' : h.kind === 'user' ? '8,5' : undefined,
+            }}
+          />
+        );
+      })}
+
+      {(() => {
+        const list =
+          navigationRoutes?.length > 0
+            ? navigationRoutes
+            : navigationRoute?.positions?.length
+              ? [navigationRoute]
+              : [];
+        return list.map((r, i) => (
+          <MapRouteLayer key={r.id || `route-${i}`} route={r} fitBounds={i === 0} />
+        ));
+      })()}
 
       {showHospitalCluster && <HospitalCluster points={visibleHospitals} />}
 
@@ -307,7 +357,9 @@ export default function MapView({
               <BuildingPopupContent building={b} />
             </Popup>
           </Marker>
-          {showRiskHeat && b.riskScore >= 200 && (
+          {showRiskHeat &&
+            b.riskScore >= 200 &&
+            !routeHazards?.some((h) => h.buildingId === b.id) && (
             <Circle
               center={[b.lat, b.lng]}
               radius={60 + b.riskScore / 5}

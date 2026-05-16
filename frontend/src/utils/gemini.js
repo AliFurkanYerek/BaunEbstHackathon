@@ -128,6 +128,7 @@ export async function planAmbulanceRouteWithGemini({
   hazards,
   routeSample,
   avoidRadiusM = 70,
+  userAvoidRadiusM = 15,
 }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -138,25 +139,30 @@ export async function planAmbulanceRouteWithGemini({
     id: i + 1,
     lat: Number(h.lat.toFixed(5)),
     lng: Number(h.lng.toFixed(5)),
+    kind: h.kind || 'collapsed',
     collapsed: h.collapsed,
+    peopleCount: h.peopleCount,
     label: h.label,
     address: h.address || '',
-    bufferM: avoidRadiusM,
+    bufferM: h.kind === 'user' ? userAvoidRadiusM : avoidRadiusM,
   }));
 
   const userPrompt = `Yetkili panel — ambulans rota planı.
 
 GÖREV: En yakın hastaneden bildirilen olay noktasına ARAÇ rotası planla.
-KURAL: Yıkık bina / enkaz tespit noktalarının merkezine ${avoidRadiusM} metreden DAHA YAKIN yol kullanma.
-Mümkün olan en kısa süreli güvenli yolu tercih et; gerekiyorsa 0–4 ara nokta (waypoint) öner.
+KURALLAR (kesin):
+- Diğer kırmızı dairelere transit sırasında DEĞME; yan sokak / ara yol kullan.
+- Yıkık / foto: ${avoidRadiusM} m · Kullanıcı bildirimi: ${userAvoidRadiusM} m tampon.
+- Olay yerinin kendi kırmızı alanına varışta GİRİLEBİLİR (en kısa yol).
+0–5 ara nokta; transit için kırmızı dışında kalsın.
 
 HASTANE (başlangıç):
 ${JSON.stringify({ name: hospital.name, lat: hospital.lat, lng: hospital.lng })}
 
-BİLDİRİLEN KONUM (varış):
+OLAY YERİ (varış — kendi kırmızısına girilebilir):
 ${JSON.stringify({ name: destination.name, lat: destination.lat, lng: destination.lng, kind: destination.kind })}
 
-YIKIK BİNA TESPİTLERİ (Roboflow — kaçınılacak, ${hazardList.length} adet):
+KAÇINILACAK NOKTALAR (olay hariç, ${hazardList.length} adet):
 ${JSON.stringify(hazardList)}
 
 İLK OSRM ARAÇ ROTASI ÖRNEK NOKTALARI (referans):
@@ -178,8 +184,7 @@ Yanıtı YALNIZCA şu JSON olarak ver (başka metin yok):
           parts: [
             {
               text: `Sen afet koordinasyonunda ambulans rota planlayıcısısın. Koordinatlar WGS84 (lat, lng).
-Yıkık bina tespitlerinin ${avoidRadiusM} m yakınından geçen güzergâhları reddet.
-Sadece geçerli JSON döndür.`,
+Transitte diğer kırmızılara girme; olay yerine en kısa güvenli yol. Yan sokaklar. Sadece JSON.`,
             },
           ],
         },
@@ -215,4 +220,110 @@ Sadece geçerli JSON döndür.`,
     waypoints,
     notes: typeof parsed.notes === 'string' ? parsed.notes.trim() : '',
   };
+}
+
+/**
+ * Fotoğraf — enkaz / yol kapalı / riskli bölge (Gemini Vision).
+ * @returns {Promise<{ isRisky: boolean, category: string, radiusM: number, notes: string, confidence?: number }>}
+ */
+export async function analyzePhotoRiskWithGemini({ base64, mimeType = 'image/jpeg', lat, lng }) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Gemini API anahtarı gerekli (frontend/.env).');
+  }
+
+  const locHint =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? `Fotoğraf koordinatları: ${lat.toFixed(5)}, ${lng.toFixed(5)}.`
+      : 'Konum bilinmiyor.';
+
+  const res = await fetch(
+    `${API_BASE}/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text: `Afet fotoğraf analisti. Türkçe. Sadece JSON.
+Kategoriler: "enkaz_olabilir" | "yol_kapali" | "riskli_bolge" | "guvenli".
+riskli=true ise ambulans bu noktadan kaçınmalı.`,
+            },
+          ],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: { mimeType, data: base64 },
+              },
+              {
+                text: `${locHint}
+Bu deprem/afet fotoğrafını incele. Enkaz, yıkık bina, yol kapanması veya geçiş riski var mı?
+
+Yanıt JSON:
+{
+  "isRisky": boolean,
+  "category": "enkaz_olabilir" | "yol_kapali" | "riskli_bolge" | "guvenli",
+  "radiusM": number,
+  "confidence": 0-1,
+  "notes": "Türkçe 1-2 cümle"
+}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.15,
+          maxOutputTokens: 512,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  );
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const raw = data?.error?.message ?? data?.error;
+    throw new Error(formatUserMessage(raw) || `Gemini görüntü hatası (${res.status})`);
+  }
+
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini görüntü yanıtı alınamadı.');
+
+  const parsed = parseJsonFromGemini(text);
+  const category = String(parsed.category || 'guvenli');
+  const isRisky = Boolean(parsed.isRisky) && category !== 'guvenli';
+  const defaultRadius =
+    category === 'enkaz_olabilir' ? 70 : category === 'yol_kapali' ? 55 : 45;
+
+  return {
+    isRisky,
+    category,
+    radiusM: Math.min(90, Math.max(25, Number(parsed.radiusM) || defaultRadius)),
+    confidence: parsed.confidence,
+    notes: typeof parsed.notes === 'string' ? parsed.notes.trim() : '',
+  };
+}
+
+export async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl !== 'string') {
+        reject(new Error('Dosya okunamadı'));
+        return;
+      }
+      const base64 = dataUrl.split(',')[1];
+      resolve({
+        base64,
+        mimeType: file.type || 'image/jpeg',
+      });
+    };
+    reader.onerror = () => reject(new Error('Dosya okunamadı'));
+    reader.readAsDataURL(file);
+  });
 }

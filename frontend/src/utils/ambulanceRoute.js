@@ -1,147 +1,132 @@
-import { findNearestHospital } from './distanceCalculator.js';
-import { fetchDrivingRoute, straightLineRoute, formatRouteSummary } from './osrmRoute.js';
-import { getGeminiApiKey, planAmbulanceRouteWithGemini } from './gemini.js';
-import {
-  COLLAPSED_AVOID_RADIUS_M,
-  collectDamageHazards,
-  routeViolatesHazards,
-  bypassWaypointForHazard,
-  sampleRoutePositions,
-  closestRoutePointToHazard,
-} from './hazardZones.js';
-
-const MAX_LOCAL_PASSES = 6;
-
-function dedupeWaypoints(waypoints) {
-  const out = [];
-  for (const w of waypoints) {
-    if (!Number.isFinite(w.lat) || !Number.isFinite(w.lng)) continue;
-    const dup = out.some(
-      (o) => Math.abs(o.lat - w.lat) < 1e-5 && Math.abs(o.lng - w.lng) < 1e-5
-    );
-    if (!dup) out.push({ lat: w.lat, lng: w.lng, reason: w.reason });
-  }
-  return out.slice(0, 6);
-}
-
-async function routeWithAvoidance(from, to, hazards, geminiWaypoints = []) {
-  let via = dedupeWaypoints(geminiWaypoints);
-  let route;
-
-  try {
-    route = await fetchDrivingRoute(from, to, via);
-  } catch {
-    route = straightLineRoute(from, to);
-    route.source = 'straight';
-  }
-
-  for (let pass = 0; pass < MAX_LOCAL_PASSES; pass++) {
-    if (!routeViolatesHazards(route.positions, hazards)) break;
-
-    const violators = hazards.filter((h) => {
-      const cp = closestRoutePointToHazard(route.positions, h);
-      return cp.distM < (h.radiusM ?? COLLAPSED_AVOID_RADIUS_M);
-    });
-
-    if (!violators.length) break;
-
-    for (const h of violators) {
-      const bypass = bypassWaypointForHazard(h, route.positions);
-      via.push({ ...bypass, reason: `${h.label} — ${COLLAPSED_AVOID_RADIUS_M} m tampon` });
-    }
-    via = dedupeWaypoints(via);
-
-    try {
-      route = await fetchDrivingRoute(from, to, via);
-    } catch {
-      break;
-    }
-  }
-
-  return { route, via };
-}
-
 /**
- * @param {{
- *   destination: { lat: number; lng: number; name?: string; kind?: string };
- *   hospitals: Array<{ lat: number; lng: number; name?: string; il?: string }>;
- *   photoReports: Array<object>;
- *   useGemini?: boolean;
- * }} params
+ * Ambulans rotası — 4 OSRM adayı; kullanıcı bildirimine 15 m yakın olanlar elenir.
  */
-export async function buildAmbulanceRoute({
+import { findNearestHospital } from './distanceCalculator.js';
+import { estimateAmbulanceCount } from './ambulanceCount.js';
+import { formatRouteSummary } from './osrmRoute.js';
+import { withTimeout } from './routeDeadline.js';
+import { collectAllRouteHazards, getAvoidanceHazards, USER_REPORT_AVOID_RADIUS_M } from './hazardZones.js';
+import { pickBestRouteAvoidingUserReports, userReportsForRouteCheck } from './routeCandidatePicker.js';
+
+const ROUTE_COLOR = '#22c55e';
+const BUILD_ROUTE_TIMEOUT_MS = 30000;
+
+function resolveHospital(destination, hospitals) {
+  const h = findNearestHospital(destination.lat, destination.lng, hospitals);
+  if (!h?.lat || !h?.lng) return null;
+  return { lat: h.lat, lng: h.lng, name: h.name };
+}
+
+/** Haritada gösterilecek kullanıcı bildirimi daireleri (15 m). */
+function userHazardsForMap(buildings, incident) {
+  return userReportsForRouteCheck(buildings, incident).map((b) => ({
+    lat: b.lat,
+    lng: b.lng,
+    radiusM: USER_REPORT_AVOID_RADIUS_M,
+    kind: 'user',
+    buildingId: b.id,
+  }));
+}
+
+async function buildAmbulanceRouteInner({
   destination,
   hospitals,
   photoReports,
-  useGemini = true,
+  buildings = [],
+  selectedIncident = null,
 }) {
   if (!Number.isFinite(destination.lat) || !Number.isFinite(destination.lng)) {
-    throw new Error('Bildirilen konum geçersiz.');
+    throw new Error('Hedef konum geçersiz.');
   }
 
-  const hospital = findNearestHospital(destination.lat, destination.lng, hospitals);
-  if (!hospital?.lat || !hospital?.lng) {
-    throw new Error('Yakın hastane bulunamadı.');
+  const hospital = resolveHospital(destination, hospitals);
+  if (!hospital) {
+    throw new Error(
+      'Hedefe yakın hastane bulunamadı. Sayfayı yenileyin veya: npm run fetch:hospitals'
+    );
   }
 
-  const hazards = collectDamageHazards(photoReports);
-  const from = { lat: hospital.lat, lng: hospital.lng, name: hospital.name };
-  const to = {
+  const incident = {
     lat: destination.lat,
     lng: destination.lng,
-    name: destination.name || 'Bildirilen konum',
+    name: destination.name || 'Olay yeri',
     kind: destination.kind,
+    id: destination.id ?? selectedIncident?.id,
   };
 
-  let baseRoute;
-  try {
-    baseRoute = await fetchDrivingRoute(from, to);
-  } catch {
-    baseRoute = straightLineRoute(from, to);
-    baseRoute.source = 'straight';
-  }
+  const from = { lat: hospital.lat, lng: hospital.lng, name: hospital.name };
+  const to = incident;
 
-  let geminiWaypoints = [];
-  let geminiNotes = '';
+  const picked = await pickBestRouteAvoidingUserReports(from, to, buildings, incident);
+  const osrm = picked.route;
 
-  if (useGemini && getGeminiApiKey()) {
-    try {
-      const plan = await planAmbulanceRouteWithGemini({
-        hospital: { name: hospital.name, lat: hospital.lat, lng: hospital.lng },
-        destination: to,
-        hazards,
-        routeSample: sampleRoutePositions(baseRoute.positions),
-        avoidRadiusM: COLLAPSED_AVOID_RADIUS_M,
-      });
-      geminiWaypoints = plan.waypoints;
-      geminiNotes = plan.notes;
-    } catch {
-      /* Yerel kaçınma ile devam */
-    }
-  }
+  const summary = formatRouteSummary(osrm.distanceM, osrm.durationS, 'driving');
+  const route = {
+    id: 'ambulance-route',
+    positions: osrm.positions,
+    distanceM: osrm.distanceM,
+    durationS: osrm.durationS,
+    source: 'osrm',
+    color: ROUTE_COLOR,
+    routeKind: 'ambulance',
+    label: `Ambulans — güvenli yol ${picked.selectedIndex}/${picked.candidateCount}`,
+    from,
+    to,
+    summary,
+    isEstimate: false,
+    weight: 6,
+    opacity: 0.95,
+    showEndpoints: true,
+  };
 
-  const { route, via } = await routeWithAvoidance(from, to, hazards, geminiWaypoints);
-  const stillViolates = routeViolatesHazards(route.positions, hazards);
+  const userHazards = userHazardsForMap(buildings, incident);
+  const allHazards = getAvoidanceHazards(
+    collectAllRouteHazards(photoReports, buildings),
+    incident
+  );
+
+  const ambulance = estimateAmbulanceCount({
+    destination: incident,
+    buildings,
+    photoReports,
+    selectedIncident,
+  });
 
   return {
     ok: true,
-    positions: route.positions,
-    distanceM: route.distanceM,
-    durationS: route.durationS,
-    source: route.source,
+    routes: [route],
+    primaryRoute: route,
+    positions: osrm.positions,
+    distanceM: osrm.distanceM,
+    durationS: osrm.durationS,
+    source: 'osrm',
     routeKind: 'ambulance',
+    simpleRoute: false,
     from,
     to,
     originName: hospital.name,
-    destinationName: to.name,
+    destinationName: incident.name,
     hospitalName: hospital.name,
-    hospitalDistanceKm: hospital.distanceKm,
-    hazards,
-    hazardCount: hazards.length,
-    waypointCount: via.length,
-    avoidsCollapsed: !stillViolates,
-    geminiNotes,
-    summary: formatRouteSummary(route.distanceM, route.durationS, 'driving'),
-    isEstimate: route.source === 'straight',
+    avoidsHazards: true,
+    avoidHazards: userHazards,
+    hazards: allHazards,
+    geminiNotes: picked.routeNotes,
+    routeCandidates: picked.evaluated,
+    rejectedRouteCount: picked.rejectedCount,
+    safeRouteCount: picked.safeCount,
+    candidateCount: picked.candidateCount,
+    summary,
+    isEstimate: false,
+    ambulanceCount: ambulance.count,
+    ambulanceDetail: ambulance.detail,
+    ambulanceMeta: ambulance,
   };
+}
+
+export function buildAmbulanceRoute(opts) {
+  return withTimeout(
+    buildAmbulanceRouteInner(opts),
+    BUILD_ROUTE_TIMEOUT_MS,
+    'Rota hesabı zaman aşımı (30 sn). Tekrar deneyin.'
+  );
 }

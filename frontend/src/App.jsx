@@ -1,22 +1,30 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar.jsx';
+import LoginScreen from './components/LoginScreen.jsx';
+import EmergencyModePlatform from './components/EmergencyModePlatform.jsx';
 import UserPlatform from './components/UserPlatform.jsx';
 import AuthorityPlatform from './components/AuthorityPlatform.jsx';
-import { STORAGE_KEY } from './data/sampleData.js';
+import { loadSession, clearSession } from './data/authCredentials.js';
+import { STORAGE_KEY, MAP_CENTER, MAP_ZOOM } from './data/sampleData.js';
 import { enrichAllBuildings } from './utils/buildingEnricher.js';
 import { sortByRisk } from './utils/riskCalculator.js';
 import { useAssemblyPoints, toSafeZones } from './hooks/useAssemblyPoints.js';
 import { useHospitals } from './hooks/useHospitals.js';
 import { groupSafeZonesByCity } from './utils/safeZonesByCity.js';
-import {
-  loadZoneArrivals,
-  saveZoneArrivals,
-} from './utils/zoneArrivals.js';
+import { loadZoneArrivals, saveZoneArrivals } from './utils/zoneArrivals.js';
 import {
   loadPhotoReports,
   savePhotoReports,
   createPhotoReport,
 } from './utils/photoDamageStorage.js';
+import {
+  snapshotAppState,
+  loadEmergencySession,
+  clearEmergencySession,
+  isEmergencyAutoOffline,
+  registerEmergencyServiceWorker,
+} from './utils/offlineCache.js';
+import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 
 let idCounter = Date.now();
 
@@ -36,19 +44,46 @@ function saveBuildings(buildings) {
 }
 
 export default function App() {
-  const [platform, setPlatform] = useState('user');
+  const online = useOnlineStatus();
+  const emergencyStored = loadEmergencySession();
+  const [session, setSession] = useState(() => loadSession() || emergencyStored);
+  const [emergencyMode, setEmergencyMode] = useState(
+    () => Boolean(emergencyStored?.emergency)
+  );
+
+  const platform =
+    session?.role === 'authority' ? 'authority' : session?.role === 'emergency' ? 'emergency' : 'user';
+
   const { assemblyPoints, loading: zonesLoading } = useAssemblyPoints();
-  const { hospitals, loading: hospitalsLoading, count: hospitalCount } = useHospitals();
+  const {
+    hospitals,
+    loading: hospitalsLoading,
+    error: hospitalsError,
+    count: hospitalCount,
+  } = useHospitals();
   const safeZones = useMemo(() => toSafeZones(assemblyPoints), [assemblyPoints]);
   const zonesByCity = useMemo(() => groupSafeZonesByCity(safeZones), [safeZones]);
   const [rawBuildings, setRawBuildings] = useState(loadBuildings);
   const [zoneArrivals, setZoneArrivals] = useState(loadZoneArrivals);
   const [photoReports, setPhotoReports] = useState(loadPhotoReports);
+  const snapshotTimer = useRef(null);
 
   const buildings = useMemo(
     () => sortByRisk(enrichAllBuildings(rawBuildings, safeZones)),
     [rawBuildings, safeZones]
   );
+
+  useEffect(() => {
+    registerEmergencyServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    if (!online && isEmergencyAutoOffline() && session && !emergencyMode) {
+      const em = { role: 'emergency', username: 'acil', label: 'Acil Mod', emergency: true };
+      setSession(em);
+      setEmergencyMode(true);
+    }
+  }, [online, session, emergencyMode]);
 
   useEffect(() => {
     saveBuildings(rawBuildings);
@@ -61,6 +96,37 @@ export default function App() {
   useEffect(() => {
     savePhotoReports(photoReports);
   }, [photoReports]);
+
+  useEffect(() => {
+    if (!online || emergencyMode) return;
+    if (zonesLoading || hospitalsLoading) return;
+
+    const snap = () => {
+      snapshotAppState({
+        assemblyPoints,
+        hospitals,
+        buildings: rawBuildings,
+        photoReports,
+        zoneArrivals,
+        mapCenter: MAP_CENTER,
+        mapZoom: MAP_ZOOM,
+      });
+    };
+
+    snap();
+    snapshotTimer.current = setInterval(snap, 60000);
+    return () => clearInterval(snapshotTimer.current);
+  }, [
+    online,
+    emergencyMode,
+    zonesLoading,
+    hospitalsLoading,
+    assemblyPoints,
+    hospitals,
+    rawBuildings,
+    photoReports,
+    zoneArrivals,
+  ]);
 
   const handleAddBuilding = useCallback((formData) => {
     const raw = {
@@ -97,11 +163,39 @@ export default function App() {
     ]);
   }, []);
 
+  const handleLogout = useCallback(() => {
+    clearSession();
+    clearEmergencySession();
+    setSession(null);
+    setEmergencyMode(false);
+  }, []);
+
+  const handleEmergencyMode = useCallback((emSession) => {
+    setSession(emSession);
+    setEmergencyMode(true);
+  }, []);
+
+  if (!session) {
+    return (
+      <div className="h-full afet-app">
+        <LoginScreen onLogin={setSession} onEmergencyMode={handleEmergencyMode} />
+      </div>
+    );
+  }
+
+  if (emergencyMode || session.emergency) {
+    return (
+      <div className="h-full afet-app">
+        <EmergencyModePlatform onExit={handleLogout} />
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full flex flex-col bg-slate-950">
-      <Navbar activePlatform={platform} onPlatformChange={setPlatform} />
+    <div className="h-full flex flex-col afet-app bg-slate-950">
+      <Navbar session={session} onLogout={handleLogout} online={online} />
       {(zonesLoading || hospitalsLoading) && (
-        <div className="shrink-0 px-4 py-1.5 bg-indigo-950/50 text-center text-xs text-indigo-300">
+        <div className="shrink-0 px-4 py-1.5 bg-amber-950/40 text-center text-xs text-amber-200/90">
           {zonesLoading && 'AFAD toplanma alanları yükleniyor...'}
           {zonesLoading && hospitalsLoading && ' · '}
           {hospitalsLoading && 'Hastane konumları yükleniyor...'}
@@ -127,6 +221,8 @@ export default function App() {
             assemblyPoints={assemblyPoints}
             hospitals={hospitals}
             hospitalCount={hospitalCount}
+            hospitalsLoading={hospitalsLoading}
+            hospitalsError={hospitalsError}
             zoneArrivals={zoneArrivals}
             photoReports={photoReports}
             onPhotoReportSaved={handlePhotoReport}

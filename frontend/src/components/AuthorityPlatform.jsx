@@ -27,6 +27,8 @@ export default function AuthorityPlatform({
   assemblyPoints,
   hospitals = [],
   hospitalCount = 0,
+  hospitalsLoading = false,
+  hospitalsError = null,
   zoneArrivals = [],
   photoReports = [],
   onPhotoReportSaved,
@@ -37,10 +39,26 @@ export default function AuthorityPlatform({
   const [selectedCity, setSelectedCity] = useState(ALL_CITIES);
   const [mapLayer, setMapLayer] = useState(MAP_LAYER_ALL);
   const [damagePhotoGeo, setDamagePhotoGeo] = useState(null);
-  const [navigationRoute, setNavigationRoute] = useState(null);
+  const [navigationRoutes, setNavigationRoutes] = useState(null);
+  const [routeMeta, setRouteMeta] = useState(null);
   const [incidentHighlight, setIncidentHighlight] = useState(null);
+  const [mapPickMode, setMapPickMode] = useState(null);
+  const [customDestination, setCustomDestination] = useState(null);
 
-  const clearRoute = useCallback(() => setNavigationRoute(null), []);
+  const handleRouteReady = useCallback((result) => {
+    if (!result?.routes?.length) {
+      setNavigationRoutes(null);
+      setRouteMeta(null);
+      return;
+    }
+    setNavigationRoutes(result.routes);
+    setRouteMeta(result);
+  }, []);
+
+  const clearRoute = useCallback(() => {
+    setNavigationRoutes(null);
+    setRouteMeta(null);
+  }, []);
 
   const handleDeletePhoto = (id) => {
     const removed = photoReports.find((p) => p.id === id);
@@ -117,8 +135,14 @@ export default function AuthorityPlatform({
         buildings={buildings}
         photoReports={photoReports}
         hospitals={hospitals}
-        onRouteReady={setNavigationRoute}
+        hospitalsLoading={hospitalsLoading}
+        hospitalsError={hospitalsError}
+        onRouteReady={handleRouteReady}
         onHighlightIncident={setIncidentHighlight}
+        mapPickMode={mapPickMode}
+        customDestination={customDestination}
+        onClearCustomDestination={() => setCustomDestination(null)}
+        onRequestMapPick={(mode) => setMapPickMode(mode)}
       />
 
       <RiskAggregationPanel buildings={buildings} photoReports={photoReports} />
@@ -136,12 +160,27 @@ export default function AuthorityPlatform({
 
       <section>
         <h3 className="font-semibold text-white mb-2">Operasyon Haritası</h3>
-        {navigationRoute?.routeKind === 'ambulance' && (
-          <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+        {mapPickMode && (
+          <p className="text-sm text-sky-200 mb-2 bg-sky-950/40 border border-sky-800/50 rounded-lg px-3 py-2">
+            Haritaya tıklayın:{' '}
+            hedef nokta
+            <button
+              type="button"
+              onClick={() => setMapPickMode(null)}
+              className="ml-3 underline text-slate-300"
+            >
+              İptal
+            </button>
+          </p>
+        )}
+        {navigationRoutes?.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
             <span className="text-rose-200">
-              🚑 Ambulans rotası: <strong>{navigationRoute.originName}</strong> →{' '}
-              <strong>{navigationRoute.destinationName}</strong>
-              {navigationRoute.summary ? ` (${navigationRoute.summary})` : ''}
+              🚑 <strong>{routeMeta?.ambulanceCount ?? 1}</strong> ambulans ·{' '}
+              <strong>{routeMeta?.originName}</strong> → <strong>{routeMeta?.destinationName}</strong>
+              {routeMeta?.summary && (
+                <span className="text-emerald-300 ml-2">({routeMeta.summary})</span>
+              )}
             </span>
             <button
               type="button"
@@ -178,7 +217,18 @@ export default function AuthorityPlatform({
             showRiskHeat
             highlightPhotoLocation={incidentHighlight || damagePhotoGeo}
             photoReports={photoReports}
-            navigationRoute={navigationRoute}
+            navigationRoutes={navigationRoutes}
+            routeHazards={
+              routeMeta?.simpleRoute ? null : routeMeta?.avoidHazards ?? routeMeta?.hazards
+            }
+            incidentTarget={routeMeta?.simpleRoute ? null : routeMeta?.to}
+            mapClickEnabled={Boolean(mapPickMode)}
+            onMapClick={(lat, lng) => {
+              if (mapPickMode === 'dest') {
+                setCustomDestination({ lat, lng, name: 'Harita hedefi' });
+                setMapPickMode(null);
+              }
+            }}
           />
         </div>
       </section>

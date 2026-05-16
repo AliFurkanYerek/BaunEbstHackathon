@@ -6,6 +6,28 @@ import {
 } from '../utils/gemini.js';
 import { formatUserMessage } from '../utils/formatUserMessage.js';
 import { wantsRouteToSafeZone, wantsRouteToHospital } from '../utils/routeIntent.js';
+import { speakTurkish, stopSpeaking, isTtsSupported } from '../utils/tts.js';
+
+function SpeakButton({ text, speaking, onSpeak }) {
+  if (!isTtsSupported()) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onSpeak(text)}
+      className={`shrink-0 p-2 rounded-lg transition-colors ${
+        speaking
+          ? 'bg-amber-600/40 text-amber-200'
+          : 'bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white'
+      }`}
+      title={speaking ? 'Sesi durdur' : 'Mesajı sesli oku'}
+      aria-label={speaking ? 'Sesi durdur' : 'Sesli oku'}
+    >
+      <span className="text-lg" aria-hidden>
+        {speaking ? '⏹' : '🔊'}
+      </span>
+    </button>
+  );
+}
 
 const WELCOME =
   'Merhaba! Ben afet asistanınızım. Haritada konumunuzu seçerseniz en yakın güvenli alanı veya hastaneyi söyleyebilir, haritada yürüyüş rotasını çizebilirim. Aşağıdaki öne çıkan sorulardan birine tıklayabilir veya kendi sorunuzu yazabilirsiniz.';
@@ -29,7 +51,23 @@ export default function Chatbot({
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [speakingKey, setSpeakingKey] = useState(null);
   const listRef = useRef(null);
+
+  const handleSpeak = (key, text) => {
+    if (speakingKey === key) {
+      stopSpeaking();
+      setSpeakingKey(null);
+      return;
+    }
+    stopSpeaking();
+    setSpeakingKey(key);
+    speakTurkish(text, {
+      onEnd: () => setSpeakingKey(null),
+    });
+  };
+
+  useEffect(() => () => stopSpeaking(), []);
 
   const hasKey = Boolean(getGeminiApiKey() || import.meta.env.VITE_GEMINI_API_KEY);
 
@@ -176,14 +214,14 @@ export default function Chatbot({
     <>
       {open && (
         <div
-          className="fixed bottom-20 right-4 z-[2000] w-[min(100vw-2rem,380px)] h-[min(70vh,520px)] flex flex-col rounded-2xl border border-indigo-700/50 bg-slate-900 shadow-2xl shadow-indigo-950/50 overflow-hidden"
+          className="fixed bottom-32 right-4 z-[2000] w-[min(100vw-2rem,420px)] h-[min(75vh,560px)] flex flex-col rounded-2xl border border-amber-800/40 bg-slate-900 shadow-2xl shadow-black/50 overflow-hidden"
           role="dialog"
           aria-label="Afet asistanı sohbet"
         >
-          <header className="shrink-0 px-4 py-3 bg-indigo-950/80 border-b border-indigo-800/50 flex items-center justify-between">
+          <header className="shrink-0 px-4 py-3 bg-amber-950/50 border-b border-amber-900/40 flex items-center justify-between">
             <div>
-              <p className="font-semibold text-white text-sm">🤖 Afet Asistanı</p>
-              <p className="text-[10px] text-indigo-300">Gemini 2.5 Flash</p>
+              <p className="font-semibold text-white text-lg">🤖 Afet Asistanı</p>
+              <p className="text-sm text-amber-200/70">Sesli okuma · Türkçe</p>
             </div>
             <div className="flex gap-1">
               <button
@@ -237,25 +275,35 @@ export default function Chatbot({
             ref={listRef}
             className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0"
           >
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+            {messages.map((m, i) => {
+              const key = `msg-${i}`;
+              return (
                 <div
-                  className={`max-w-[90%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
-                    m.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-md'
-                      : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-bl-md'
-                  }`}
+                  key={key}
+                  className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {formatUserMessage(m.text)}
+                  {m.role === 'model' && (
+                    <SpeakButton
+                      text={m.text}
+                      speaking={speakingKey === key}
+                      onSpeak={() => handleSpeak(key, m.text)}
+                    />
+                  )}
+                  <div
+                    className={`max-w-[85%] px-4 py-3 rounded-2xl text-base leading-relaxed whitespace-pre-wrap ${
+                      m.role === 'user'
+                        ? 'bg-sky-700 text-white rounded-br-md'
+                        : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-md'
+                    }`}
+                  >
+                    {formatUserMessage(m.text)}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {loading && (
               <div className="flex justify-start">
-                <div className="px-3 py-2 rounded-2xl bg-slate-800 text-slate-400 text-sm animate-pulse">
+                <div className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-400 text-base animate-pulse">
                   Yazıyor...
                 </div>
               </div>
@@ -270,7 +318,7 @@ export default function Chatbot({
 
           {!loading && (
             <div className="shrink-0 px-3 pb-2 space-y-1.5 border-t border-slate-800/50 pt-2">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide font-medium">
+              <p className="text-sm text-slate-500 uppercase tracking-wide font-medium">
                 Öne çıkan sorular
               </p>
               {quickQuestions.map((q) => (
@@ -278,7 +326,7 @@ export default function Chatbot({
                   key={q}
                   type="button"
                   onClick={() => sendQuickQuestion(q)}
-                  className="w-full text-left text-xs px-3 py-2.5 rounded-lg bg-slate-800/80 text-slate-300 hover:bg-indigo-950/50 hover:text-white border border-slate-700 hover:border-indigo-600/50 transition-colors"
+                  className="w-full text-left text-base px-4 py-3 rounded-lg bg-slate-800/80 text-slate-200 hover:bg-amber-950/40 hover:text-white border border-slate-700 hover:border-amber-700/50 transition-colors"
                 >
                   {q}
                 </button>
@@ -295,12 +343,12 @@ export default function Chatbot({
               onChange={(e) => setInput(e.target.value)}
               placeholder="Sorunuzu yazın..."
               disabled={loading}
-              className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+              className="flex-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-base text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-600 disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-medium disabled:opacity-40"
+              className="px-5 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-base font-semibold disabled:opacity-40"
             >
               Gönder
             </button>
@@ -311,7 +359,7 @@ export default function Chatbot({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-4 right-4 z-[2000] w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50 flex items-center justify-center text-2xl border-2 border-indigo-400/30 transition-transform hover:scale-105"
+        className="fixed bottom-4 right-4 z-[2000] w-28 h-28 rounded-full bg-amber-600 hover:bg-amber-500 text-white shadow-xl shadow-black/40 flex items-center justify-center text-5xl border-2 border-amber-400/40 transition-transform hover:scale-105"
         aria-label={open ? 'Sohbeti kapat' : 'Afet asistanını aç'}
       >
         {open ? '✕' : '💬'}

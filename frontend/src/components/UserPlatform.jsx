@@ -3,6 +3,7 @@ import MapView from './MapView.jsx';
 import BuildingForm from './BuildingForm.jsx';
 import Chatbot from './Chatbot.jsx';
 import BottomAssemblyPanel from './BottomAssemblyPanel.jsx';
+import EarthquakeTable from './EarthquakeTable.jsx';
 import CityZoneFilter from './CityZoneFilter.jsx';
 import MapLayerFilter from './MapLayerFilter.jsx';
 import { MAP_LAYER_ALL, USER_MAP_LAYERS } from '../utils/mapLayerFilter.js';
@@ -274,6 +275,8 @@ export default function UserPlatform({
         zonesByCity={zonesByCity}
         onArrival={onZoneArrival}
       />
+
+      <EarthquakeTable />
     </div>
 
     <Chatbot

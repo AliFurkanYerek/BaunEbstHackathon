@@ -6,26 +6,49 @@
 const OSRM_FOOT = 'https://router.project-osrm.org/route/v1/foot';
 const OSRM_DRIVING = 'https://router.project-osrm.org/route/v1/driving';
 
-async function fetchOsrmRoute(base, points) {
-  const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(';');
-  const url = `${base}/${coordStr}?overview=full&geometries=geojson`;
-
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok || data.code !== 'Ok' || !data.routes?.[0]) {
-    throw new Error(data.message || `Rota alınamadı (HTTP ${res.status})`);
-  }
-
-  const route = data.routes[0];
+function mapOsrmRoute(route) {
   const positions = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-
   return {
     positions,
     distanceM: route.distance,
     durationS: route.duration,
     source: 'osrm',
   };
+}
+
+const OSRM_TIMEOUT_MS = 11000;
+
+async function fetchWithTimeout(url, ms = OSRM_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      throw new Error('OSRM zaman aşımı — ağ yavaş veya servis meşgul.');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchOsrmRoute(base, points, { alternatives = false } = {}) {
+  const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(';');
+  const alt = alternatives ? '&alternatives=true&number=3' : '';
+  const url = `${base}/${coordStr}?overview=full&geometries=geojson${alt}`;
+
+  const res = await fetchWithTimeout(url);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || data.code !== 'Ok' || !data.routes?.[0]) {
+    throw new Error(data.message || `Rota alınamadı (HTTP ${res.status})`);
+  }
+
+  if (alternatives) {
+    return data.routes.map(mapOsrmRoute);
+  }
+  return mapOsrmRoute(data.routes[0]);
 }
 
 /**
@@ -45,6 +68,12 @@ export async function fetchWalkingRoute(from, to) {
 export async function fetchDrivingRoute(from, to, via = []) {
   const points = [from, ...via, to];
   return fetchOsrmRoute(OSRM_DRIVING, points);
+}
+
+/** OSRM alternatif sürüş rotaları (yan sokak varyantları). */
+export async function fetchDrivingRouteAlternatives(from, to, via = []) {
+  const points = [from, ...via, to];
+  return fetchOsrmRoute(OSRM_DRIVING, points, { alternatives: true });
 }
 
 /** OSRM başarısız olursa kuş uçuşu çizgi (tahmini). */

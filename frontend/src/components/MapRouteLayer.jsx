@@ -40,90 +40,80 @@ function FitRouteBounds({ positions }) {
   return null;
 }
 
-/**
- * @param {{ positions: [number,number][]; distanceM?: number; durationS?: number; source?: string; destinationName?: string; to?: { lat: number; lng: number } }} route
- */
-export default function MapRouteLayer({ route }) {
+export default function MapRouteLayer({ route, fitBounds = false }) {
   if (!route?.positions?.length) return null;
 
   const isStraight = route.source === 'straight';
   const isAmbulance = route.routeKind === 'ambulance';
   const isHospital = route.routeKind === 'hospital';
-  const routeColor = isAmbulance
-    ? isStraight
-      ? '#fb7185'
-      : '#f43f5e'
-    : isHospital
-      ? isStraight
-        ? '#f87171'
-        : '#dc2626'
-      : isStraight
-        ? '#f59e0b'
-        : '#22d3ee';
+  const routeColor =
+    route.color ||
+    (isAmbulance
+      ? '#22c55e'
+      : isHospital
+        ? isStraight
+          ? '#f87171'
+          : '#dc2626'
+        : isStraight
+          ? '#f59e0b'
+          : '#22d3ee');
+  const weight = route.weight ?? (isAmbulance ? 6 : 5);
+  const opacity = route.opacity ?? 0.9;
   const summary =
     route.distanceM != null && route.durationS != null
-      ? formatRouteSummary(
-          route.distanceM,
-          route.durationS,
-          isAmbulance ? 'driving' : 'foot'
-        )
+      ? formatRouteSummary(route.distanceM, route.durationS, isAmbulance ? 'driving' : 'foot')
       : null;
+  const showEndpoints = route.showEndpoints !== false && (route.tier === 'short' || !route.tier);
 
   return (
     <>
-      <FitRouteBounds positions={route.positions} />
+      {fitBounds && <FitRouteBounds positions={route.positions} />}
       <Polyline
         positions={route.positions}
         pathOptions={{
           color: routeColor,
-          weight: 6,
-          opacity: 0.9,
-          dashArray: isStraight ? '12, 10' : undefined,
+          weight,
+          opacity,
+          dashArray: isStraight ? '12, 10' : route.tier === 'long' ? '8, 6' : undefined,
           lineCap: 'round',
           lineJoin: 'round',
         }}
       />
-      {route.from && isAmbulance && (
+      {showEndpoints && route.from && isAmbulance && (
         <Marker position={[route.from.lat, route.from.lng]} icon={routeOriginIconAmbulance}>
           <Popup>
             <div className="text-slate-800 text-sm min-w-[160px]">
-              <p className="font-bold">🚑 {route.originName || 'Hastane (kalkış)'}</p>
+              <p className="font-bold">🚑 {route.originName || 'Hastane'}</p>
+            </div>
+          </Popup>
+        </Marker>
+      )}
+      {showEndpoints && route.to && isAmbulance && (
+        <Marker position={[route.to.lat, route.to.lng]} icon={routeDestIconIncident}>
+          <Popup>
+            <div className="text-slate-800 text-sm min-w-[160px]">
+              <p className="font-bold">📍 {route.destinationName || 'Olay yeri'}</p>
+              <p className="text-xs mt-1 text-slate-600">Varış — olay kırmızısına girilebilir</p>
               {summary && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
             </div>
           </Popup>
         </Marker>
       )}
-      {route.to && (
+      {showEndpoints && route.to && !isAmbulance && (
         <Marker
           position={[route.to.lat, route.to.lng]}
           icon={
-            isAmbulance
-              ? routeDestIconIncident
-              : route.routeKind === 'hospital'
-                ? routeDestIconHospital
-                : routeDestIconSafe
+            route.routeKind === 'hospital' ? routeDestIconHospital : routeDestIconSafe
           }
         >
           <Popup>
             <div className="text-slate-800 text-sm min-w-[160px]">
+              {route.label && <p className="text-xs font-semibold text-slate-500">{route.label}</p>}
               <p className="font-bold">
-                {isAmbulance ? '📍' : route.routeKind === 'hospital' ? '🏥' : '🛡️'}{' '}
-                {route.destinationName ||
-                  (isAmbulance
-                    ? 'Bildirilen konum'
-                    : route.routeKind === 'hospital'
-                      ? 'Hastane'
-                      : 'Güvenli bölge')}
+                {route.routeKind === 'hospital' ? '🏥' : '🛡️'}{' '}
+                {route.destinationName || 'Hedef'}
               </p>
-              {summary && !route.from && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
-              {isAmbulance && route.geminiNotes && (
-                <p className="text-xs mt-1 text-slate-600">{route.geminiNotes}</p>
-              )}
-              {isStraight && (
-                <p className="text-xs mt-1 text-amber-700">
-                  Sokak rotası alınamadı; düz çizgi gösteriliyor.
-                </p>
-              )}
+              {summary && <p className="text-xs mt-1 text-slate-600">{summary}</p>}
             </div>
           </Popup>
         </Marker>

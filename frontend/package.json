@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:afad": "node scripts/build-afad-toplanma.mjs",
-    "fetch:afad-regions": "node scripts/fetch-afad-cities.mjs"
+    "fetch:afad-regions": "node scripts/fetch-afad-cities.mjs",
+    "fetch:hospitals": "node scripts/fetch-hospitals-overpass.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
