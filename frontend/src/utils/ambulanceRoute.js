@@ -1,5 +1,5 @@
 /**
- * Ambulans rotası — 4 OSRM adayı; kullanıcı bildirimine 15 m yakın olanlar elenir.
+ * Ambulans rotası — 30 aday (OSRM + ara sokak); kullanıcı bildirimi 15 m elemesi.
  */
 import { findNearestHospital } from './distanceCalculator.js';
 import { estimateAmbulanceCount } from './ambulanceCount.js';
@@ -9,7 +9,7 @@ import { collectAllRouteHazards, getAvoidanceHazards, USER_REPORT_AVOID_RADIUS_M
 import { pickBestRouteAvoidingUserReports, userReportsForRouteCheck } from './routeCandidatePicker.js';
 
 const ROUTE_COLOR = '#22c55e';
-const BUILD_ROUTE_TIMEOUT_MS = 30000;
+const BUILD_ROUTE_TIMEOUT_MS = 120000;
 
 function resolveHospital(destination, hospitals) {
   const h = findNearestHospital(destination.lat, destination.lng, hospitals);
@@ -69,7 +69,12 @@ async function buildAmbulanceRouteInner({
     source: 'osrm',
     color: ROUTE_COLOR,
     routeKind: 'ambulance',
-    label: `Ambulans — güvenli yol ${picked.selectedIndex}/${picked.candidateCount}`,
+    label:
+      picked.route?.variant === 'sokak-zinciri'
+        ? 'Ambulans — cadde/sokak zinciri'
+        : `Ambulans — güvenli yol ${picked.selectedIndex}/${picked.candidateCount}`,
+    streetLabels: picked.route?.streetLabels,
+    sokakCount: picked.route?.sokakCount,
     from,
     to,
     summary,
@@ -111,6 +116,8 @@ async function buildAmbulanceRouteInner({
     avoidHazards: userHazards,
     hazards: allHazards,
     geminiNotes: picked.routeNotes,
+    streetLabels: picked.route?.streetLabels,
+    sokakCount: picked.route?.sokakCount,
     routeCandidates: picked.evaluated,
     rejectedRouteCount: picked.rejectedCount,
     safeRouteCount: picked.safeCount,
@@ -127,6 +134,6 @@ export function buildAmbulanceRoute(opts) {
   return withTimeout(
     buildAmbulanceRouteInner(opts),
     BUILD_ROUTE_TIMEOUT_MS,
-    'Rota hesabı zaman aşımı (30 sn). Tekrar deneyin.'
+    'Rota hesabı zaman aşımı (2 dk). Tekrar deneyin.'
   );
 }

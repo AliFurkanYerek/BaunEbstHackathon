@@ -6,6 +6,8 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../config/app_config.dart';
 import '../services/permissions_service.dart';
+import '../widgets/emergency_siren_bar.dart';
+import 'emergency_siren_screen.dart';
 import 'url_settings_sheet.dart';
 
 class WebAppScreen extends StatefulWidget {
@@ -141,33 +143,53 @@ class _WebAppScreenState extends State<WebAppScreen> {
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
+            tooltip: 'Acil ses / düdük (internetsiz)',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const EmergencySirenScreen(),
+                  fullscreenDialog: true,
+                ),
+              );
+            },
+            icon: const Icon(Icons.campaign, color: Colors.amber),
+          ),
+          IconButton(
             tooltip: 'Sunucu adresi',
             onPressed: _openSettings,
             icon: const Icon(Icons.settings),
           ),
         ],
       ),
-      body: SafeArea(
-        child: controller == null
-            ? const Center(child: CircularProgressIndicator())
-            : Stack(
-                children: [
-                  WebViewWidget(controller: controller),
-                  if (_loading && _progress < 100)
-                    LinearProgressIndicator(
-                      value: _progress / 100,
-                      minHeight: 3,
-                      backgroundColor: Colors.transparent,
+      body: Column(
+        children: [
+          Expanded(
+            child: SafeArea(
+              bottom: false,
+              child: controller == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      children: [
+                        WebViewWidget(controller: controller),
+                        if (_loading && _progress < 100)
+                          LinearProgressIndicator(
+                            value: _progress / 100,
+                            minHeight: 3,
+                            backgroundColor: Colors.transparent,
+                          ),
+                        if (_hasError)
+                          _ErrorOverlay(
+                            message: _errorMessage,
+                            url: _currentUrl,
+                            onRetry: () => controller.reload(),
+                            onSettings: _openSettings,
+                          ),
+                      ],
                     ),
-                  if (_hasError)
-                    _ErrorOverlay(
-                      message: _errorMessage,
-                      url: _currentUrl,
-                      onRetry: () => controller.reload(),
-                      onSettings: _openSettings,
-                    ),
-                ],
-              ),
+            ),
+          ),
+          const EmergencySirenBar(),
+        ],
       ),
     );
   }

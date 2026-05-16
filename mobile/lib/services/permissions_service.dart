@@ -8,3 +8,9 @@ Future<void> requestWebAppPermissions() async {
     Permission.photos,
   ].request();
 }
+
+/// Flaşör (fener) için kamera izni — acil düdük modu.
+Future<bool> requestTorchPermission() async {
+  final status = await Permission.camera.request();
+  return status.isGranted;
+}

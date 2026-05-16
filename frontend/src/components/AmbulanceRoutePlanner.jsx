@@ -105,14 +105,17 @@ export default function AmbulanceRoutePlanner({
     <section className="rounded-xl border border-rose-900/50 bg-slate-900/80 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-800 bg-rose-950/30">
         <h3 className="font-semibold text-white flex items-center gap-2 text-base">
-          <span aria-hidden>🚑</span> Ambulans — 4 yol denemesi
+          <span aria-hidden>🚑</span> Ambulans — 30 yol denemesi (ara sokak dahil)
         </h3>
       </div>
 
       <div className="p-4 space-y-4">
         <p className="text-sm text-slate-400 leading-relaxed">
-          <strong className="text-emerald-300">4 farklı araç yolu</strong> OSRM ile hesaplanır; her biri tek tek
-          kontrol edilir. Yol üzerinde veya <strong className="text-rose-300">15 m</strong> içinde{' '}
+          <strong className="text-emerald-300">30 farklı yol</strong> denenir: otoyol/trunk{' '}
+          <strong className="text-slate-300">kullanılmaz</strong>; örnek cadde zinciri (Örgü Cad. → Özdemir
+          Sok. → … → Yavuz Sultan Selim Cad.) ve mahalle ara noktaları OSRM’ye zorlanır. Güvenli olanlar arasında{' '}
+          <strong className="text-sky-300">en çok sokak içeren</strong> rota seçilir.
+          Yol üzerinde veya <strong className="text-rose-300">15 m</strong> içinde{' '}
           <strong>kullanıcı bildirimi</strong> varsa o rota elenir; kalan en kısa güvenli yol seçilir.
           Başlangıç: hedefe en yakın hastane (otomatik).
         </p>
@@ -180,7 +183,7 @@ export default function AmbulanceRoutePlanner({
           disabled={loading || hospitalsLoading || !destination || !hospitals?.length}
           className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 font-semibold text-white text-base disabled:opacity-40"
         >
-          {loading ? '4 yol deneniyor…' : '🚑 Güvenli rota oluştur'}
+          {loading ? '30 yol deneniyor…' : '🚑 Güvenli rota oluştur'}
         </button>
 
         {error && (
@@ -198,11 +201,22 @@ export default function AmbulanceRoutePlanner({
             {lastResult.geminiNotes && (
               <p className="text-xs text-slate-300">{lastResult.geminiNotes}</p>
             )}
+            {lastResult.primaryRoute?.streetLabels && (
+              <p className="text-xs text-violet-200/80 italic">{lastResult.primaryRoute.streetLabels}</p>
+            )}
             {lastResult.routeCandidates?.length > 0 && (
-              <ul className="text-xs text-slate-400 space-y-0.5 border-t border-slate-800 pt-2">
-                {lastResult.routeCandidates.map((c) => (
+              <ul className="text-xs text-slate-400 space-y-0.5 border-t border-slate-800 pt-2 max-h-40 overflow-y-auto">
+                {lastResult.routeCandidates.slice(0, 15).map((c) => (
                   <li key={c.index}>
-                    Yol {c.index}:{' '}
+                    Yol {c.index}
+                    {c.variant === 'sokak-zinciri'
+                      ? ' · cadde zinciri'
+                      : c.variant?.startsWith('sokak')
+                        ? ' · sokak'
+                        : c.variant?.startsWith('side') || c.variant?.startsWith('mahalle')
+                          ? ' · mahalle'
+                          : ''}
+                    {c.sokakCount > 0 ? ` · ${c.sokakCount} sokak` : ''}:{' '}
                     {c.safe ? (
                       <span className="text-emerald-400">✓ güvenli</span>
                     ) : (
@@ -213,6 +227,11 @@ export default function AmbulanceRoutePlanner({
                     )}
                   </li>
                 ))}
+                {lastResult.routeCandidates.length > 15 && (
+                  <li className="text-slate-500 italic">
+                    + {lastResult.routeCandidates.length - 15} yol daha (özet üstte)
+                  </li>
+                )}
               </ul>
             )}
             <p className="text-lg font-bold text-amber-200">

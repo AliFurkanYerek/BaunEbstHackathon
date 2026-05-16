@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import MapView from './MapView.jsx';
+import EmergencySirenButton from './EmergencySirenButton.jsx';
 import { MAP_LAYER_ALL } from '../utils/mapLayerFilter.js';
 import { getEmergencyMapData, saveOfflineSnapshot } from '../utils/offlineCache.js';
 import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
@@ -112,6 +113,7 @@ export default function EmergencyModePlatform({ onExit }) {
             offlineMode
           />
         </div>
+        <EmergencySirenButton />
       </main>
     </div>
   );

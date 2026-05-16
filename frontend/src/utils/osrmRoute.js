@@ -1,22 +1,43 @@
 /**
- * Açık OSRM — yürüyüş rotası (GeoJSON koordinatları Leaflet [lat,lng]).
- * https://project-osrm.org/
+ * Açık OSRM — yürüyüş / araç; ara sokak için otoyol/trunk hariç tutulabilir.
  */
 
 const OSRM_FOOT = 'https://router.project-osrm.org/route/v1/foot';
 const OSRM_DRIVING = 'https://router.project-osrm.org/route/v1/driving';
 
+const OSRM_TIMEOUT_MS = 11000;
+
+/** Ana arterleri düşük öncelik — mahalle/sokak ağına iter. */
+export const RESIDENTIAL_EXCLUDE = 'motorway,trunk,motorway_link,trunk_link';
+
+function countSokakInRoute(route) {
+  const names = [];
+  for (const leg of route.legs || []) {
+    for (const step of leg.steps || []) {
+      if (step.name) names.push(step.name);
+    }
+  }
+  const sokakCount = names.filter((n) => /sokak/i.test(n)).length;
+  const caddeCount = names.filter((n) => /cadde/i.test(n)).length;
+  return {
+    streetNames: names,
+    sokakCount,
+    caddeCount,
+    residentialScore: sokakCount * 3 + caddeCount,
+  };
+}
+
 function mapOsrmRoute(route) {
   const positions = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+  const meta = countSokakInRoute(route);
   return {
     positions,
     distanceM: route.distance,
     durationS: route.duration,
     source: 'osrm',
+    ...meta,
   };
 }
-
-const OSRM_TIMEOUT_MS = 11000;
 
 async function fetchWithTimeout(url, ms = OSRM_TIMEOUT_MS) {
   const ctrl = new AbortController();
@@ -33,13 +54,27 @@ async function fetchWithTimeout(url, ms = OSRM_TIMEOUT_MS) {
   }
 }
 
-async function fetchOsrmRoute(base, points, { alternatives = false } = {}) {
+async function fetchOsrmRoute(base, points, { alternatives = false, excludeMotorways = true } = {}) {
   const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(';');
   const alt = alternatives ? '&alternatives=true&number=3' : '';
-  const url = `${base}/${coordStr}?overview=full&geometries=geojson${alt}`;
+  const steps = '&steps=true';
+  const exclude =
+    excludeMotorways && base === OSRM_DRIVING
+      ? `&exclude=${encodeURIComponent(RESIDENTIAL_EXCLUDE)}`
+      : '';
+  const url = `${base}/${coordStr}?overview=full&geometries=geojson${steps}${alt}${exclude}`;
 
-  const res = await fetchWithTimeout(url);
-  const data = await res.json().catch(() => ({}));
+  let res = await fetchWithTimeout(url);
+  let data = await res.json().catch(() => ({}));
+
+  if (
+    exclude &&
+    (!res.ok || data.code !== 'Ok' || !data.routes?.[0])
+  ) {
+    const urlNoEx = url.replace(/&exclude=[^&]+/, '');
+    res = await fetchWithTimeout(urlNoEx);
+    data = await res.json().catch(() => ({}));
+  }
 
   if (!res.ok || data.code !== 'Ok' || !data.routes?.[0]) {
     throw new Error(data.message || `Rota alınamadı (HTTP ${res.status})`);
@@ -51,32 +86,26 @@ async function fetchOsrmRoute(base, points, { alternatives = false } = {}) {
   return mapOsrmRoute(data.routes[0]);
 }
 
-/**
- * @param {{ lat: number; lng: number }} from
- * @param {{ lat: number; lng: number }} to
- * @returns {Promise<{ positions: [number, number][]; distanceM: number; durationS: number; source: 'osrm' }>}
- */
 export async function fetchWalkingRoute(from, to) {
-  return fetchOsrmRoute(OSRM_FOOT, [from, to]);
+  return fetchOsrmRoute(OSRM_FOOT, [from, to], { excludeMotorways: false });
 }
 
 /**
- * @param {{ lat: number; lng: number }} from
- * @param {{ lat: number; lng: number }} to
- * @param {Array<{ lat: number; lng: number }>} [via]
+ * @param {object} [opts]
+ * @param {boolean} [opts.excludeMotorways=true] — otoyol/trunk kullanma
  */
-export async function fetchDrivingRoute(from, to, via = []) {
+export async function fetchDrivingRoute(from, to, via = [], opts = {}) {
   const points = [from, ...via, to];
-  return fetchOsrmRoute(OSRM_DRIVING, points);
+  const excludeMotorways = opts.excludeMotorways !== false;
+  return fetchOsrmRoute(OSRM_DRIVING, points, { excludeMotorways });
 }
 
-/** OSRM alternatif sürüş rotaları (yan sokak varyantları). */
-export async function fetchDrivingRouteAlternatives(from, to, via = []) {
+export async function fetchDrivingRouteAlternatives(from, to, via = [], opts = {}) {
   const points = [from, ...via, to];
-  return fetchOsrmRoute(OSRM_DRIVING, points, { alternatives: true });
+  const excludeMotorways = opts.excludeMotorways !== false;
+  return fetchOsrmRoute(OSRM_DRIVING, points, { alternatives: true, excludeMotorways });
 }
 
-/** OSRM başarısız olursa kuş uçuşu çizgi (tahmini). */
 export function straightLineRoute(from, to) {
   const distM = haversineM(from.lat, from.lng, to.lat, to.lng);
   return {
@@ -87,6 +116,8 @@ export function straightLineRoute(from, to) {
     distanceM: distM,
     durationS: distM / 1.2,
     source: 'straight',
+    sokakCount: 0,
+    residentialScore: 0,
   };
 }
 
