@@ -1,0 +1,15 @@
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Harita ve güvenli bölge konumunuz için konum erişimi gerekir.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Bina hasar fotoğrafı yüklemek için kamera erişimi gerekir.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Galeriden hasar fotoğrafı seçmek için erişim gerekir.</string>
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>

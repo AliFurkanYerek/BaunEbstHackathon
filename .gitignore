@@ -17,3 +17,19 @@ frontend/scripts/debug-afad-response.txt
 .vite/
 coverage/
 .cache/
+
+# Flutter mobile
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/**/Generated.xcconfig
+mobile/**/flutter_export_environment.sh
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/**/GeneratedPluginRegistrant.java
+mobile/.idea/
+mobile/windows/flutter/ephemeral/

@@ -65,6 +65,16 @@ Veriler `localStorage` içinde saklanır.
 
 Haritadaki mor noktalar [AFAD açık veri](https://github.com/RKursatV/afad-toplanma-alani-acik-veri) kaynağından gelir (şu an deprem bölgesi illeri). Tüm Türkiye için `npm run build:afad` (frontend klasöründe).
 
+## Mobil (Flutter WebView)
+
+Cross-platform Android / iOS kabuğu: `mobile/` klasörü. Kurulum ve çalıştırma: [mobile/README.md](mobile/README.md).
+
+```powershell
+cd mobile
+.\setup.ps1
+# frontend: npm run dev  |  mobile: flutter run
+```
+
 ## npm paketleri
 
 - react, react-dom
