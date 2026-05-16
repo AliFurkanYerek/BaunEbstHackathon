@@ -4,9 +4,13 @@ import {
   getGeminiApiKey,
   setGeminiApiKey,
 } from '../utils/gemini.js';
-import { formatUserMessage } from '../utils/formatUserMessage.js';
+import {
+  formatUserMessage,
+  isGeminiQuotaOrRateLimitError,
+} from '../utils/formatUserMessage.js';
 import { wantsRouteToSafeZone, wantsRouteToHospital } from '../utils/routeIntent.js';
 import { speakTurkish, stopSpeaking, isTtsSupported } from '../utils/tts.js';
+import AppLogo from './AppLogo.jsx';
 
 function SpeakButton({ text, speaking, onSpeak }) {
   if (!isTtsSupported()) return null;
@@ -170,7 +174,8 @@ export default function Chatbot({
       reply = await appendRouteHint(text, reply);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
-      setError(formatUserMessage(err?.message ?? err) || 'Bir hata oluştu');
+      const errText = formatUserMessage(err?.message ?? err);
+      setError(isGeminiQuotaOrRateLimitError(errText) ? '' : errText || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -204,7 +209,8 @@ export default function Chatbot({
       reply = await appendRouteHint(question, reply);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
-      setError(formatUserMessage(err?.message ?? err) || 'Bir hata oluştu');
+      const errText = formatUserMessage(err?.message ?? err);
+      setError(isGeminiQuotaOrRateLimitError(errText) ? '' : errText || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -218,10 +224,13 @@ export default function Chatbot({
           role="dialog"
           aria-label="Afet asistanı sohbet"
         >
-          <header className="shrink-0 px-4 py-3 bg-amber-950/50 border-b border-amber-900/40 flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-white text-lg">🤖 Afet Asistanı</p>
-              <p className="text-sm text-amber-200/70">Sesli okuma · Türkçe</p>
+          <header className="shrink-0 px-4 py-3 bg-amber-950/50 border-b border-amber-900/40 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <AppLogo className="h-9 w-12 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold text-white text-sm truncate">Afet Asistanı</p>
+                <p className="text-xs text-amber-200/70">Sesli okuma · Türkçe</p>
+              </div>
             </div>
             <div className="flex gap-1">
               <button
@@ -359,10 +368,14 @@ export default function Chatbot({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-4 right-4 z-[2000] w-28 h-28 rounded-full bg-amber-600 hover:bg-amber-500 text-white shadow-xl shadow-black/40 flex items-center justify-center text-5xl border-2 border-amber-400/40 transition-transform hover:scale-105"
+        className="fixed bottom-4 right-4 z-[2000] w-20 h-20 rounded-full bg-slate-900/95 hover:bg-slate-800 shadow-xl shadow-black/50 flex items-center justify-center border-2 border-amber-500/50 p-2 transition-transform hover:scale-105 overflow-hidden"
         aria-label={open ? 'Sohbeti kapat' : 'Afet asistanını aç'}
       >
-        {open ? '✕' : '💬'}
+        {open ? (
+          <span className="text-2xl text-white">✕</span>
+        ) : (
+          <AppLogo className="h-full w-full" alt="" />
+        )}
       </button>
     </>
   );

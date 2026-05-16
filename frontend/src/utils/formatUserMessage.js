@@ -24,3 +24,24 @@ export function formatUserMessage(value) {
   }
   return String(value);
 }
+
+/** Gemini kota / rate-limit — kullanıcıya ham API metni gösterme. */
+export function isGeminiQuotaOrRateLimitError(message) {
+  const text = formatUserMessage(message).toLowerCase();
+  if (!text) return false;
+  return (
+    text.includes('quota') ||
+    text.includes('rate limit') ||
+    text.includes('rate-limit') ||
+    text.includes('exceeded') ||
+    text.includes('generativelanguage.googleapis.com') ||
+    text.includes('ai.dev/rate-limit')
+  );
+}
+
+/** Gemini hatalarını arayüzde gösterilebilir metne çevirir; kota aşımında boş döner. */
+export function sanitizeGeminiDisplayMessage(value) {
+  const text = formatUserMessage(value);
+  if (!text || isGeminiQuotaOrRateLimitError(text)) return '';
+  return text;
+}

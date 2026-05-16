@@ -20,7 +20,7 @@ class AfetKoordinasyonApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AfetKoordinasyon AI',
+      title: 'sahAI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

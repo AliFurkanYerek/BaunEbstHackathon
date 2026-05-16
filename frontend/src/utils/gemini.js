@@ -36,7 +36,7 @@ function buildSystemPrompt(context) {
     ?.map((z) => `- ${z.name}: ${z.distanceKm} km (${z.lat}, ${z.lng})`)
     .join('\n');
 
-  return `Sen AfetKoordinasyon AI uygulamasının yardımcı asistanısın. Türkçe, sakin ve net konuş.
+  return `Sen sahAI afet koordinasyon uygulamasının yardımcı asistanısın. Türkçe, sakin ve net konuş.
 Deprem sonrası vatandaşlara yardım ediyorsun. Tıbbi teşhis koyma; acil durumda 112 ve AFAD (122) yönlendir.
 
 GÜVENLİ BÖLGELER — ŞEHİR ÖZETİ:

@@ -4,9 +4,8 @@ import {
   saveSession,
   LOGIN_HINTS,
 } from '../data/authCredentials.js';
+import AppLogo from './AppLogo.jsx';
 import {
-  isEmergencyAutoOffline,
-  setEmergencyAutoOffline,
   saveEmergencySession,
   registerEmergencyServiceWorker,
   snapshotAppState,
@@ -18,7 +17,6 @@ export default function LoginScreen({ onLogin, onEmergencyMode }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [autoOffline, setAutoOffline] = useState(isEmergencyAutoOffline);
 
   const submit = (e) => {
     e.preventDefault();
@@ -55,19 +53,14 @@ export default function LoginScreen({ onLogin, onEmergencyMode }) {
       emergency: true,
     };
     saveEmergencySession(session);
-    setEmergencyAutoOffline(autoOffline);
     onEmergencyMode?.(session);
   };
 
   return (
     <div className="min-h-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-950 via-slate-900 to-rose-950/20">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <span className="text-5xl" aria-hidden>
-            🛡️
-          </span>
-          <h1 className="text-3xl font-bold text-white mt-3">AfetKoordinasyon AI</h1>
-          <p className="text-base text-slate-400 mt-2">Dijital afet yönetimi platformu</p>
+        <div className="flex justify-center mb-8">
+          <AppLogo className="h-32 w-48 mx-auto" />
         </div>
 
         <button
@@ -83,16 +76,6 @@ export default function LoginScreen({ onLogin, onEmergencyMode }) {
             Önbellek harita — giriş şifresi gerekmez
           </span>
         </button>
-
-        <label className="flex items-center gap-2 text-sm text-slate-400 mb-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={autoOffline}
-            onChange={(e) => setAutoOffline(e.target.checked)}
-            className="rounded"
-          />
-          İnternet kesilince otomatik acil moda geç
-        </label>
 
         <form
           onSubmit={submit}

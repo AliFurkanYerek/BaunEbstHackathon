@@ -2,7 +2,6 @@
 import { analyzeImage, checkInferenceBackend } from '../utils/roboflow.js';
 import { geolocatePhoto } from '../utils/geoPhoto.js';
 import { formatUserMessage } from '../utils/formatUserMessage.js';
-import { analyzePhotoRiskWithGemini, fileToBase64, getGeminiApiKey } from '../utils/gemini.js';
 
 export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSaved }) {
   const [backendStatus, setBackendStatus] = useState(null);
@@ -13,7 +12,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
   const [result, setResult] = useState(null);
   const [geoInfo, setGeoInfo] = useState(null);
   const [geoLoading, setGeoLoading] = useState(false);
-  const [geminiRisk, setGeminiRisk] = useState(null);
   const canvasRef = useRef(null);
   const imgRef = useRef(null);
 
@@ -40,7 +38,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
     setResult(null);
     setError('');
     setGeoInfo(null);
-    setGeminiRisk(null);
     onPhotoLocated?.(null);
     onPhotoReportSaved?.(null);
   };
@@ -51,13 +48,10 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
     setGeoLoading(true);
     setError('');
     setGeoInfo(null);
-    setGeminiRisk(null);
     onPhotoLocated?.(null);
     onPhotoReportSaved?.(null);
 
     let analysisData = null;
-    let geoLat;
-    let geoLng;
 
     try {
       try {
@@ -83,8 +77,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
               reasoning: loc.reasoning || '',
               source: g.source || g.engine || 'geoseeer',
             };
-            geoLat = lat;
-            geoLng = lng;
             setGeoInfo({ ok: true, ...payload });
             onPhotoLocated?.(payload);
             if (analysisData) {
@@ -112,23 +104,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
           ok: false,
           error: formatUserMessage(geoErr?.message ?? geoErr) || 'Konum servisi hatası',
         });
-      }
-      if (file && getGeminiApiKey() && Number.isFinite(geoLat) && Number.isFinite(geoLng)) {
-        try {
-          const { base64, mimeType } = await fileToBase64(file);
-          const risk = await analyzePhotoRiskWithGemini({
-            base64,
-            mimeType,
-            lat: geoLat,
-            lng: geoLng,
-          });
-          setGeminiRisk(risk);
-        } catch (gemErr) {
-          setGeminiRisk({
-            isRisky: false,
-            notes: formatUserMessage(gemErr?.message) || 'Gemini risk analizi atlandı',
-          });
-        }
       }
     } finally {
       setLoading(false);
@@ -281,23 +256,6 @@ export default function BuildingDamageAnalyzer({ onPhotoLocated, onPhotoReportSa
           <p className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
             {error}
           </p>
-        )}
-
-        {geminiRisk && (
-          <div
-            className={`text-sm rounded-lg px-3 py-2 border ${
-              geminiRisk.isRisky
-                ? 'bg-red-950/40 border-red-800/60 text-red-100'
-                : 'bg-slate-950/50 border-slate-700 text-slate-300'
-            }`}
-          >
-            <p className="font-medium">
-              {geminiRisk.isRisky
-                ? `⚠️ Gemini: riskli (${geminiRisk.category}) — rota seçiminde dikkate alınabilir`
-                : '✓ Gemini: geçiş için belirgin risk görülmedi'}
-            </p>
-            {geminiRisk.notes && <p className="text-xs mt-1 opacity-90">{geminiRisk.notes}</p>}
-          </div>
         )}
 
         {result && (

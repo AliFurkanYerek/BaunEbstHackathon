@@ -1,22 +1,12 @@
+import AppLogo from './AppLogo.jsx';
+
 export default function Navbar({ session, onLogout, online = true }) {
   const isAuthority = session?.role === 'authority';
 
   return (
     <nav className="shrink-0 border-b border-amber-900/30 bg-slate-900/95 backdrop-blur">
       <div className="max-w-[1600px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl" aria-hidden>
-            🛡️
-          </span>
-          <div>
-            <h1 className="font-bold text-lg leading-tight text-white">
-              AfetKoordinasyon AI
-            </h1>
-            <p className="text-[10px] text-amber-200/50 uppercase tracking-widest">
-              Dijital Afet Yönetimi
-            </p>
-          </div>
-        </div>
+        <AppLogo className="h-10 w-14" showText />
 
         <div className="flex items-center gap-3">
           {!online && (

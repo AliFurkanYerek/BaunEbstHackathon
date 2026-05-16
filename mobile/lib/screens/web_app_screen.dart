@@ -131,7 +131,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AfetKoordinasyon AI'),
+        title: const Text('sahAI'),
         backgroundColor: const Color(0xFF1e293b),
         foregroundColor: Colors.white,
         actions: [
