@@ -25,6 +25,7 @@ import {
   registerEmergencyServiceWorker,
 } from './utils/offlineCache.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
+import { BUILDINGS_UPDATED_EVENT } from './utils/buildingStorage.js';
 
 let idCounter = Date.now();
 
@@ -131,10 +132,25 @@ export default function App() {
   const handleAddBuilding = useCallback((formData) => {
     const raw = {
       id: `bina-${++idCounter}`,
+      reportSource: 'user_panel',
+      isEnkazSos: false,
       ...formData,
       createdAt: new Date().toISOString(),
     };
     setRawBuildings((prev) => [...prev, raw]);
+  }, []);
+
+  useEffect(() => {
+    const reload = () => setRawBuildings(loadBuildings());
+    const onStorage = (e) => {
+      if (e.key === STORAGE_KEY) reload();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(BUILDINGS_UPDATED_EVENT, reload);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(BUILDINGS_UPDATED_EVENT, reload);
+    };
   }, []);
 
   const handlePhotoReport = useCallback((payload) => {

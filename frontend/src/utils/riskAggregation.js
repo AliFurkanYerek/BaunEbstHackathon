@@ -26,7 +26,7 @@ export function calculatePhotoRiskScore(report) {
 export function buildUserRiskRows(buildings) {
   return buildings.map((b) => ({
     id: b.id,
-    kind: 'user',
+    kind: b.isEnkazSos || b.reportSource === 'home_enkaz' ? 'enkaz_sos' : 'user',
     name: b.name,
     street: b.street,
     lat: b.lat,

@@ -1,7 +1,20 @@
 import { formatUserMessage } from './formatUserMessage.js';
 
-const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
+const PRIMARY_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite';
+/** Kota dolunca sırayla dene (test edildi: bu anahtarla 2.5-flash-lite çalışıyor). */
+const MODEL_FALLBACKS = [
+  PRIMARY_MODEL,
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+].filter((m, i, arr) => m && arr.indexOf(m) === i);
+
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+function isQuotaError(status, message) {
+  if (status === 429) return true;
+  const t = String(message || '').toLowerCase();
+  return t.includes('quota') || t.includes('resource_exhausted') || t.includes('rate limit');
+}
 
 export function getGeminiApiKey() {
   return (
@@ -25,7 +38,7 @@ function buildSystemPrompt(context) {
     .join('\n');
 
   const zones = context.safeZones
-    ?.slice(0, 40)
+    ?.slice(0, 15)
     .map(
       (z) =>
         `- ${z.name} (${z.il || 'il yok'}): enlem ${z.lat}, boylam ${z.lng}, kapasite ${z.capacity} kişi`
@@ -67,6 +80,28 @@ Kısa, madde madde, uygulanabilir cevaplar ver. Panik yaratma.`;
 /**
  * @param {Array<{role: 'user'|'model', text: string}>} messages
  */
+async function generateWithModel(apiKey, model, payload) {
+  const res = await fetch(
+    `${API_BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const raw = data?.error?.message ?? data?.error;
+    const msg = formatUserMessage(raw) || `Gemini API hatası (${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Yanıt alınamadı. Lütfen tekrar deneyin.');
+  return text.trim();
+}
+
 export async function sendGeminiMessage(messages, context = {}) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -75,40 +110,32 @@ export async function sendGeminiMessage(messages, context = {}) {
     );
   }
 
-  const contents = messages.map((m) => ({
+  const contents = messages.slice(-12).map((m) => ({
     role: m.role === 'user' ? 'user' : 'model',
     parts: [{ text: m.text }],
   }));
 
-  const res = await fetch(
-    `${API_BASE}/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: buildSystemPrompt(context) }],
-        },
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      }),
+  const payload = {
+    systemInstruction: {
+      parts: [{ text: buildSystemPrompt(context) }],
+    },
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+    },
+  };
+
+  let lastError;
+  for (const model of MODEL_FALLBACKS) {
+    try {
+      return await generateWithModel(apiKey, model, payload);
+    } catch (err) {
+      lastError = err;
+      if (!isQuotaError(err.status, err.message)) break;
     }
-  );
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const raw = data?.error?.message ?? data?.error;
-    const msg = formatUserMessage(raw) || `Gemini API hatası (${res.status})`;
-    throw new Error(msg);
   }
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Yanıt alınamadı. Lütfen tekrar deneyin.');
-  return text.trim();
+  throw lastError || new Error('Gemini yanıt veremedi.');
 }
 
 function parseJsonFromGemini(text) {
@@ -175,7 +202,7 @@ Yanıtı YALNIZCA şu JSON olarak ver (başka metin yok):
 }`;
 
   const res = await fetch(
-    `${API_BASE}/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `${API_BASE}/${PRIMARY_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,7 +265,7 @@ export async function analyzePhotoRiskWithGemini({ base64, mimeType = 'image/jpe
       : 'Konum bilinmiyor.';
 
   const res = await fetch(
-    `${API_BASE}/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `${API_BASE}/${PRIMARY_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -40,6 +40,8 @@ export default function BuildingForm({ onSubmit, selectedCoords, onClearCoords }
       emergencyTypes: [...emergencyTypes],
       lat: Number(lat),
       lng: Number(lng),
+      reportSource: 'user_panel',
+      isEnkazSos: false,
     });
 
     e.target.reset();

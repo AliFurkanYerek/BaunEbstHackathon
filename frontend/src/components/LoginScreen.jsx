@@ -5,6 +5,7 @@ import {
   LOGIN_HINTS,
 } from '../data/authCredentials.js';
 import AppLogo from './AppLogo.jsx';
+import EnkazSosButton from './EnkazSosButton.jsx';
 import {
   saveEmergencySession,
   registerEmergencyServiceWorker,
@@ -62,6 +63,8 @@ export default function LoginScreen({ onLogin, onEmergencyMode }) {
         <div className="flex justify-center mb-8">
           <AppLogo className="h-32 w-48 mx-auto" />
         </div>
+
+        <EnkazSosButton />
 
         <button
           type="button"

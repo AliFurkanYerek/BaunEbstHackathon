@@ -16,6 +16,7 @@ import {
   showsSafeZones,
 } from '../utils/mapLayerFilter.js';
 import { isIncidentHazard } from '../utils/hazardZones.js';
+import { isEnkazHomeReport } from '../utils/buildingStorage.js';
 import { zoneType, zoneRing } from '../utils/riskGeometry.js';
 
 const DAMAGE_COLORS = {
@@ -36,6 +37,32 @@ function damageIcon(level, highRisk = false) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+const USER_REPORT_COLOR = '#eab308';
+const ENKAZ_SOS_COLOR = '#a855f7';
+
+function buildingMarkerIcon(building, highRisk = false) {
+  const pulse = highRisk ? 'marker-pulse' : '';
+  if (isEnkazHomeReport(building)) {
+    const size = 22;
+    return L.divIcon({
+      className: '',
+      html: `<div class="marker-damage ${pulse}" style="width:${size}px;height:${size}px;background:${ENKAZ_SOS_COLOR};border:3px solid #fff;border-radius:50%;box-shadow:0 0 14px ${ENKAZ_SOS_COLOR}"></div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+  }
+  if (building.reportSource === 'user_panel' || building.emergencyTypes?.length) {
+    const size = 18;
+    return L.divIcon({
+      className: '',
+      html: `<div class="marker-damage ${pulse}" style="width:${size}px;height:${size}px;background:${USER_REPORT_COLOR};border:2px solid #fff;border-radius:50%"></div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+  }
+  return damageIcon(building.damageLevel, highRisk);
 }
 
 const safeIcon = L.divIcon({
@@ -119,7 +146,12 @@ function BuildingPopupContent({ building }) {
 
   return (
     <div className="text-slate-800 text-sm min-w-[200px]">
-      <p className="font-bold">{building.name}</p>
+      <p className="font-bold">
+        {building.name}
+        {isEnkazHomeReport(building) && (
+          <span className="ml-1 text-violet-600 text-xs">· Ana sayfa SOS</span>
+        )}
+      </p>
       <p className="text-xs text-slate-500">{building.street}</p>
       <p className="text-xs mt-1">Kişi: {building.peopleCount} · Hasar: {building.damageLevel}/5</p>
       <ul className="text-xs mt-1 space-y-0.5">
@@ -351,7 +383,7 @@ export default function MapView({
         <Fragment key={b.id}>
           <Marker
             position={[b.lat, b.lng]}
-            icon={damageIcon(b.damageLevel, showRiskHeat && b.riskScore >= 150)}
+            icon={buildingMarkerIcon(b, showRiskHeat && b.riskScore >= 150)}
           >
             <Popup>
               <BuildingPopupContent building={b} />

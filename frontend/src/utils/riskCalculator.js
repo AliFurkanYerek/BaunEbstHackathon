@@ -7,6 +7,9 @@ import {
  * riskPuani = kisiSayisi * 3 + hasarSeviyesi * 25 + (seçili acil durum katsayıları toplamı)
  */
 export function calculateRiskScore(building) {
+  if (building?.isEnkazSos || building?.reportSource === 'home_enkaz') {
+    return 500;
+  }
   const people = Number(building.peopleCount) || 0;
   const damage = Number(building.damageLevel) || 1;
   const types = normalizeEmergencyTypes(building);

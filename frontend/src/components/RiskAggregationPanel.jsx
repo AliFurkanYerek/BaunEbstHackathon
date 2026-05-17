@@ -77,7 +77,7 @@ function UserRiskTable({ rows }) {
   return (
     <TableShell
       title="2 · Kullanıcı bildirimleri"
-      subtitle="Kişi × 3 + hasar × 25 + acil durum katsayıları toplamı"
+      subtitle="Sarı: kullanıcı paneli · Mor (ana sayfa): enkaz SOS risk 500"
     >
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-slate-900">
@@ -98,9 +98,16 @@ function UserRiskTable({ rows }) {
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={r.id} className="border-t border-slate-800/80">
+              <tr
+                key={r.id}
+                className={`border-t border-slate-800/80 ${r.kind === 'enkaz_sos' ? 'bg-violet-950/30' : ''}`}
+              >
                 <td className="p-2 text-slate-500">{i + 1}</td>
-                <td className="p-2 font-medium text-white text-xs">{r.name}</td>
+                <td
+                  className={`p-2 font-medium text-xs ${r.kind === 'enkaz_sos' ? 'text-violet-300' : 'text-white'}`}
+                >
+                  {r.name}
+                </td>
                 <td className="p-2">{r.peopleCount}</td>
                 <td className="p-2 text-[10px] max-w-[140px]">
                   {r.emergencyLabels.join(' · ')}

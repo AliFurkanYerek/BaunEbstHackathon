@@ -4,11 +4,9 @@ import {
   getGeminiApiKey,
   setGeminiApiKey,
 } from '../utils/gemini.js';
-import {
-  formatUserMessage,
-  isGeminiQuotaOrRateLimitError,
-} from '../utils/formatUserMessage.js';
-import { wantsRouteToSafeZone, wantsRouteToHospital } from '../utils/routeIntent.js';
+import { formatUserMessage } from '../utils/formatUserMessage.js';
+import { wantsRouteToSafeZone, wantsRouteToHospital, wantsDrawRouteOnMap } from '../utils/routeIntent.js';
+import { buildLocalChatReply, getGeminiErrorHint } from '../utils/chatbotFallback.js';
 import { speakTurkish, stopSpeaking, isTtsSupported } from '../utils/tts.js';
 import AppLogo from './AppLogo.jsx';
 
@@ -135,25 +133,48 @@ export default function Chatbot({
   };
 
   const appendRouteHint = async (questionText, reply) => {
+    const base = reply?.trim() || '';
     if (wantsRouteToHospital(questionText) && onShowRouteToNearestHospital) {
       const routeResult = await onShowRouteToNearestHospital();
       if (!routeResult?.ok) {
-        return `${reply}\n\n🏥 ${routeResult?.error || 'Hastane rotası gösterilemedi.'}`;
+        return `${base}\n\n🏥 ${routeResult?.error || 'Hastane rotası gösterilemedi.'}`.trim();
       }
       const extra = routeResult.isEstimate
         ? ' (sokak rotası alınamadı, düz çizgi)'
         : '';
-      return `${reply}\n\n🏥 Haritada ${routeResult.hospitalName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`;
+      return `${base}\n\n🏥 Haritada ${routeResult.hospitalName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`.trim();
     }
-    if (!wantsRouteToSafeZone(questionText) || !onShowRouteToNearest) return reply;
+    if (!wantsRouteToSafeZone(questionText) || !onShowRouteToNearest) return base;
     const routeResult = await onShowRouteToNearest();
     if (!routeResult?.ok) {
-      return `${reply}\n\n🗺️ ${routeResult?.error || 'Rota gösterilemedi.'}`;
+      return `${base}\n\n🗺️ ${routeResult?.error || 'Rota gösterilemedi.'}`.trim();
     }
     const extra = routeResult.isEstimate
       ? ' (sokak rotası alınamadı, düz çizgi)'
       : '';
-    return `${reply}\n\n🗺️ Haritada ${routeResult.zoneName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`;
+    return `${base}\n\n🗺️ Haritada ${routeResult.zoneName} için yürüyüş rotası çizildi${extra}: ${routeResult.summary}.`.trim();
+  };
+
+  const resolveReply = async (questionText, history) => {
+    let reply = '';
+    let hint = '';
+
+    try {
+      reply = await sendGeminiMessage(history, context);
+    } catch (err) {
+      const errText = formatUserMessage(err?.message ?? err);
+      hint = getGeminiErrorHint(errText);
+      reply = buildLocalChatReply(questionText, context);
+      if (!reply) {
+        throw err;
+      }
+    }
+
+    if (wantsDrawRouteOnMap(questionText)) {
+      reply = await appendRouteHint(questionText, reply);
+    }
+
+    return { reply, hint };
   };
 
   const handleSend = async (e) => {
@@ -170,12 +191,12 @@ export default function Chatbot({
 
     try {
       const history = nextMessages.filter((m) => m.role === 'user' || m.role === 'model');
-      let reply = await sendGeminiMessage(history, context);
-      reply = await appendRouteHint(text, reply);
+      const { reply, hint } = await resolveReply(text, history);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
+      if (hint) setError(hint);
     } catch (err) {
       const errText = formatUserMessage(err?.message ?? err);
-      setError(isGeminiQuotaOrRateLimitError(errText) ? '' : errText || 'Bir hata oluştu');
+      setError(getGeminiErrorHint(errText) || errText || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -205,12 +226,12 @@ export default function Chatbot({
     setLoading(true);
     try {
       const history = nextMessages.filter((m) => m.role === 'user' || m.role === 'model');
-      let reply = await sendGeminiMessage(history, context);
-      reply = await appendRouteHint(question, reply);
+      const { reply, hint } = await resolveReply(question, history);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
+      if (hint) setError(hint);
     } catch (err) {
       const errText = formatUserMessage(err?.message ?? err);
-      setError(isGeminiQuotaOrRateLimitError(errText) ? '' : errText || 'Bir hata oluştu');
+      setError(getGeminiErrorHint(errText) || errText || 'Bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -274,8 +295,12 @@ export default function Chatbot({
                   Kaydet
                 </button>
               </div>
-              {hasKey && (
-                <p className="text-emerald-400 mt-1">✓ Anahtar tanımlı</p>
+              {hasKey ? (
+                <p className="text-emerald-400 mt-1">Anahtar tanımlı</p>
+              ) : (
+                <p className="text-amber-400 mt-1">
+                  Anahtar yok — yalnızca yerel yanıt ve rota çalışır
+                </p>
               )}
             </div>
           )}
@@ -319,8 +344,14 @@ export default function Chatbot({
             )}
           </div>
 
+          {!selectedCoords && (
+            <p className="shrink-0 px-3 py-2 text-xs text-amber-300 bg-amber-950/40 border-t border-amber-900/50">
+              Rota için önce haritada konumunuzu işaretleyin (tıklayın).
+            </p>
+          )}
+
           {error && (
-            <p className="shrink-0 px-3 py-1 text-xs text-red-400 border-t border-slate-800">
+            <p className="shrink-0 px-3 py-2 text-xs text-amber-200/90 bg-slate-800/80 border-t border-slate-700">
               {formatUserMessage(error)}
             </p>
           )}
